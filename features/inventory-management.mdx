@@ -1,0 +1,406 @@
+---
+title: Inventory Management
+description: Track stock levels, monitor movements, and manage inventory across multiple workspaces with real-time accuracy
+---
+
+## Overview
+
+OptiFlow provides comprehensive inventory management with real-time stock tracking, automated movement recording, and multi-workspace support. The system automatically updates inventory when invoices are created and provides detailed stock movement history.
+
+<Info>
+Inventory is tracked at the workspace level, allowing the same product to have different stock quantities across multiple locations or business units.
+</Info>
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Real-Time Tracking" icon="gauge">
+    Stock levels update automatically when invoices are created, ensuring accurate inventory counts at all times.
+  </Card>
+  
+  <Card title="Movement History" icon="clock-rotate-left">
+    Complete audit trail of all stock movements including sales, purchases, adjustments, and transfers.
+  </Card>
+  
+  <Card title="Multi-Workspace" icon="building">
+    Track inventory separately for each workspace with support for inter-workspace transfers.
+  </Card>
+  
+  <Card title="Low Stock Alerts" icon="triangle-exclamation">
+    Monitor stock levels against minimum thresholds and identify products that need reordering.
+  </Card>
+</CardGroup>
+
+## Stock Records
+
+### ProductStock Model
+
+Each product has a stock record per workspace:
+
+```php
+// ProductStock model (app/Models/ProductStock.php)
+$stock = ProductStock::create([
+    'product_id' => $product->id,
+    'workspace_id' => $workspace->id,
+    'quantity' => 100.00,
+    'minimum_quantity' => 20.00,
+    'supplier_id' => $supplier->id, // Optional
+]);
+```
+
+### Stock Properties
+
+- **Product**: The product being tracked
+- **Workspace**: Location/workspace where stock is held
+- **Quantity**: Current stock level (decimal for fractional units)
+- **Minimum Quantity**: Reorder threshold for low stock alerts
+- **Supplier**: Optional primary supplier for this stock
+
+## Stock Operations
+
+### Checking Stock Levels
+
+```php
+// Get current stock quantity
+$currentQty = $stock->quantity;
+
+// Check if stock is low
+if ($stock->isLow()) {
+    // Quantity <= minimum_quantity
+    notify('Stock is running low!');
+}
+
+// Check if sufficient for order
+if ($stock->isSufficient($requiredQty)) {
+    // Proceed with sale
+}
+
+// Get stock status
+$status = $stock->status; // 'in_stock', 'low_stock', or 'out_of_stock'
+
+// Get level percentage
+$percentage = $stock->level_percentage; // Stock qty as % of minimum
+```
+
+### Updating Stock
+
+```php
+// Increase stock (receiving inventory)
+if ($stock->incrementStock(50)) {
+    // Stock increased successfully
+}
+
+// Decrease stock (shipping/selling)
+if ($stock->decrementStock(10)) {
+    // Stock decreased successfully
+} else {
+    // Insufficient stock available
+}
+```
+
+<Warning>
+The `decrementStock()` method returns `false` if insufficient quantity is available, preventing negative stock levels.
+</Warning>
+
+## Stock Movements
+
+### Movement Types
+
+OptiFlow tracks all inventory movements:
+
+<Tabs>
+  <Tab title="Incoming">
+    Stock additions to inventory:
+    
+    - **Purchase/Receipt**: Stock received from suppliers
+    - **Adjustment (positive)**: Inventory count corrections
+    - **Transfer In**: Stock received from another workspace
+    
+    ```php
+    StockMovement::create([
+        'type' => StockMovementType::In,
+        'quantity' => 50,
+    ]);
+    ```
+  </Tab>
+  
+  <Tab title="Outgoing">
+    Stock removals from inventory:
+    
+    - **Sale**: Stock sold via invoice
+    - **Adjustment (negative)**: Inventory count corrections
+    - **Transfer Out**: Stock sent to another workspace
+    
+    ```php
+    StockMovement::create([
+        'type' => StockMovementType::Out,
+        'quantity' => 25,
+    ]);
+    ```
+  </Tab>
+  
+  <Tab title="Transfers">
+    Inter-workspace stock transfers:
+    
+    ```php
+    StockMovement::create([
+        'type' => StockMovementType::Transfer,
+        'from_workspace_id' => $source->id,
+        'to_workspace_id' => $destination->id,
+        'quantity' => 10,
+    ]);
+    ```
+  </Tab>
+</Tabs>
+
+### Recording Movements
+
+```php
+// Create a stock movement (app/Models/StockMovement.php)
+$movement = StockMovement::create([
+    'workspace_id' => $workspace->id,
+    'product_id' => $product->id,
+    'type' => 'in', // or 'out', 'adjustment', 'transfer'
+    'quantity' => 100,
+    'unit_cost' => 45.00,
+    'total_cost' => 4500.00, // Auto-calculated if not provided
+    'related_invoice_id' => $invoice->id, // Optional
+    'user_id' => auth()->id(),
+    'reference_number' => 'PO-2024-001',
+    'note' => 'Stock received from supplier',
+]);
+```
+
+### Movement Properties
+
+- **Type**: Movement type (in, out, adjustment, transfer)
+- **Quantity**: Amount moved (always positive)
+- **Unit Cost**: Cost per unit (for purchases)
+- **Total Cost**: Total value of movement
+- **Related Invoice**: Invoice that triggered the movement
+- **User**: Who performed the action
+- **Reference Number**: External reference (PO, transfer number)
+- **Note**: Additional context
+- **From/To Workspace**: For transfers between locations
+
+### Automatic Movements
+
+Stock movements are automatically created when:
+
+- **Invoice Created**: Decreases stock for sold items
+- **Invoice Deleted**: Returns stock to inventory
+- **Manual Adjustments**: Explicit inventory corrections
+
+```php
+// Automatic movement when invoice is created
+$invoice->stockMovements; // Related movements
+
+// Each invoice item creates a stock movement
+```
+
+## Querying Inventory
+
+### Find Low Stock Products
+
+```php
+// Products with low stock in workspace
+$lowStock = ProductStock::lowStock()->get();
+
+// Filter by workspace
+$warehouseLowStock = ProductStock::forWorkspace($warehouse)
+    ->lowStock()
+    ->with('product')
+    ->get();
+```
+
+### Check Stock Availability
+
+```php
+// Products with sufficient stock
+$available = ProductStock::sufficientStock($requiredQty)
+    ->forWorkspace($workspace)
+    ->get();
+```
+
+### Movement History
+
+```php
+// Get all movements for a product
+$movements = StockMovement::forProduct($product)
+    ->orderByDesc('created_at')
+    ->get();
+
+// Movements within date range
+$movements = StockMovement::betweenDates($startDate, $endDate)
+    ->forProduct($product)
+    ->get();
+
+// Only incoming movements
+$receipts = StockMovement::incoming()->get();
+
+// Only outgoing movements
+$shipments = StockMovement::outgoing()->get();
+```
+
+### Movement Attributes
+
+```php
+// Get effective quantity (negative for outgoing)
+$effectiveQty = $movement->effective_quantity;
+
+// Check direction
+if ($movement->isIncoming()) {
+    // Stock added
+}
+
+if ($movement->isOutgoing()) {
+    // Stock removed
+}
+
+// Get human-readable description
+$description = $movement->description;
+// "Added 50 units of Premium Widget"
+```
+
+## Workspace Transfers
+
+Transfer stock between workspaces:
+
+```php
+// Create transfer movement
+$transfer = StockMovement::create([
+    'workspace_id' => $fromWorkspace->id,
+    'product_id' => $product->id,
+    'type' => StockMovementType::Transfer,
+    'quantity' => 25,
+    'from_workspace_id' => $fromWorkspace->id,
+    'to_workspace_id' => $toWorkspace->id,
+    'reference_number' => 'TR-2024-001',
+    'user_id' => auth()->id(),
+]);
+
+// Access transfer workspaces
+$source = $transfer->fromWorkspace;
+$destination = $transfer->toWorkspace;
+```
+
+<Note>
+Transfers require corresponding movements in both the source and destination workspaces to maintain accurate inventory counts.
+</Note>
+
+## Supplier Management
+
+Track primary suppliers for stock:
+
+```php
+// Assign supplier to stock record
+$stock->supplier_id = $supplier->id;
+$stock->save();
+
+// Get all stock supplied by a contact
+$suppliedStock = $supplier->suppliedStocks;
+```
+
+## Reporting & Analytics
+
+### Stock Valuation
+
+```php
+// Calculate total stock value
+$stockValue = ProductStock::forWorkspace($workspace)
+    ->get()
+    ->sum(function ($stock) {
+        return $stock->quantity * $stock->product->cost;
+    });
+```
+
+### Movement Reports
+
+```php
+// Monthly stock movements
+$monthlyMovements = StockMovement::forProduct($product)
+    ->betweenDates(now()->startOfMonth(), now()->endOfMonth())
+    ->get();
+
+// Calculate total incoming
+$totalIn = $monthlyMovements
+    ->filter->isIncoming()
+    ->sum('quantity');
+
+// Calculate total outgoing
+$totalOut = $monthlyMovements
+    ->filter->isOutgoing()
+    ->sum('quantity');
+```
+
+## Use Cases
+
+<AccordionGroup>
+  <Accordion title="Multi-Location Retail">
+    Track inventory separately for each store location, transfer stock between locations, and monitor which products need reordering at each site.
+  </Accordion>
+  
+  <Accordion title="Warehouse Management">
+    Monitor stock levels across multiple warehouses, track incoming shipments from suppliers, and fulfill orders from the appropriate location.
+  </Accordion>
+  
+  <Accordion title="Stock Audits">
+    Use the adjustment movement type to correct discrepancies found during physical inventory counts.
+  </Accordion>
+  
+  <Accordion title="Supplier Performance">
+    Track which suppliers provide stock for different products and analyze delivery history through movement records.
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<CardGroup cols={1}>
+  <Card title="Set Minimum Quantities">
+    Configure appropriate minimum stock levels for each product to receive timely low stock alerts.
+  </Card>
+  
+  <Card title="Document Movements">
+    Always include notes and reference numbers on manual stock movements for clear audit trails.
+  </Card>
+  
+  <Card title="Regular Reconciliation">
+    Periodically verify physical stock counts match system records and use adjustments to correct discrepancies.
+  </Card>
+  
+  <Card title="Track Costs">
+    Record unit costs on incoming movements to support accurate inventory valuation and COGS calculations.
+  </Card>
+</CardGroup>
+
+## API Reference
+
+### ProductStock Methods
+
+- `isLow()` - Check if stock is at or below minimum
+- `isSufficient(float $qty)` - Check if sufficient quantity available
+- `incrementStock(float $qty)` - Add to stock
+- `decrementStock(float $qty)` - Remove from stock
+- `product()` - Relationship to Product
+- `supplier()` - Relationship to Contact (supplier)
+
+Model location: `app/Models/ProductStock.php:1`
+
+### StockMovement Methods
+
+- `isIncoming()` - Check if movement adds stock
+- `isOutgoing()` - Check if movement removes stock
+- `product()` - Relationship to Product
+- `relatedDocument()` - Relationship to Invoice
+- `fromWorkspace()` - Source workspace for transfers
+- `toWorkspace()` - Destination workspace for transfers
+- `createdBy()` - Relationship to User
+
+Model location: `app/Models/StockMovement.php:1`
+
+## Related Resources
+
+- [Product Catalog](/features/product-catalog)
+- [Multi-Workspace](/features/multi-workspace)
+- [Invoicing](/features/invoicing)
+- [Contact Management](/features/contacts)

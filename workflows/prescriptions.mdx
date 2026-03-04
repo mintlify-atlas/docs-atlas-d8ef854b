@@ -1,0 +1,463 @@
+---
+title: Prescription Management
+description: Create, manage, and generate prescription documents for optical store patients in OptiFlow
+---
+
+## Introduction
+
+OptiFlow provides comprehensive prescription management for optical stores. Create detailed eye prescriptions, link them to patients and workflow jobs, and automatically generate professional PDF documents.
+
+## Prescription Data Model
+
+The `Prescription` model (`app/Models/Prescription.php`) stores complete optometric examination data.
+
+### Core Fields
+
+- **Patient**: Link to the customer contact receiving the prescription
+- **Optometrist**: Link to the optometrist who performed the examination
+- **Workspace**: Multi-tenant workspace association
+- **Created Date**: Automatic timestamp with human-readable formatting
+
+### Clinical Data
+
+Prescriptions store comprehensive optometric data through relationships with mastertable items:
+
+<AccordionGroup>
+  <Accordion title="Motivos de Consulta (Consultation Reasons)">
+    Why the patient visited (e.g., blurry vision, eye strain, routine checkup)
+  </Accordion>
+  
+  <Accordion title="Estado de Salud Actual (Current Health Status)">
+    Patient's current health conditions that may affect eye health
+  </Accordion>
+  
+  <Accordion title="Historia Ocular Familiar (Family Eye History)">
+    Family history of eye conditions (glaucoma, cataracts, etc.)
+  </Accordion>
+  
+  <Accordion title="Lentes Recomendados (Recommended Lenses)">
+    Types of lenses prescribed (single vision, bifocal, progressive, etc.)
+  </Accordion>
+  
+  <Accordion title="Gotas Recomendadas (Recommended Eye Drops)">
+    Prescribed eye drops for treatments
+  </Accordion>
+  
+  <Accordion title="Monturas Recomendadas (Recommended Frames)">
+    Frame types recommended for the patient
+  </Accordion>
+</AccordionGroup>
+
+### Visual Acuity Measurements
+
+Prescriptions include detailed measurements for both eyes:
+
+**Right Eye (OD - Oculus Dexter)**:
+- Sphere (SPH)
+- Cylinder (CYL)
+- Axis
+- Visual Acuity
+- Pupillary Distance
+
+**Left Eye (OS - Oculus Sinister)**:
+- Sphere (SPH)
+- Cylinder (CYL)
+- Axis
+- Visual Acuity
+- Pupillary Distance
+
+<Info>
+All measurements follow standard optometric notation for consistency across the industry.
+</Info>
+
+## Creating Prescriptions
+
+### From the Interface
+
+The `PrescriptionController` handles prescription creation:
+
+<Steps>
+  <Step title="Navigate to Prescriptions">
+    Access the prescriptions section from the main navigation.
+  </Step>
+  
+  <Step title="Click Create Prescription">
+    Start a new prescription form.
+  </Step>
+  
+  <Step title="Select Patient">
+    Search for and select the patient (customer contact). You can pre-fill this with `?contact_id=123` query parameter.
+  </Step>
+  
+  <Step title="Select Optometrist">
+    Choose the optometrist who performed the examination. You can pre-fill this with `?optometrist_id=456`.
+  </Step>
+  
+  <Step title="Enter Clinical Data">
+    Fill in consultation reasons, health status, family history, and recommendations using the mastertable selections.
+  </Step>
+  
+  <Step title="Record Measurements">
+    Enter sphere, cylinder, axis, and visual acuity for both eyes.
+  </Step>
+  
+  <Step title="Save">
+    Submit the prescription. It's immediately available for viewing and PDF generation.
+  </Step>
+</Steps>
+
+### Pre-filling Forms
+
+You can link directly to the prescription creation form with pre-selected values:
+
+```
+/prescriptions/create?contact_id=<patient-id>&optometrist_id=<optometrist-id>
+```
+
+This is useful when creating prescriptions from a patient's profile or during workflow job processing.
+
+<Tip>
+The contact search uses the `ContactSearch` service with role filtering. Patients must have the "customer" role, and optometrists must have the "optometrist" role.
+</Tip>
+
+## Managing Prescriptions
+
+### Listing Prescriptions
+
+The prescriptions index uses the `PrescriptionsTable` for displaying data:
+
+```php
+// app/Tables/PrescriptionsTable.php
+// Provides sortable, filterable table of all prescriptions
+```
+
+**Displayed Columns**:
+- Patient name
+- Optometrist name
+- Creation date (with human-readable format)
+- Workspace
+- Actions (view, edit, download)
+
+### Viewing Prescription Details
+
+The show view displays the complete prescription:
+
+```php
+// Loads all relationships:
+$prescription->load([
+    'patient',
+    'optometrist',
+    'workspace',
+    'motivos',
+    'estadoActual',
+    'historiaOcularFamiliar',
+    'lentesRecomendados',
+]);
+```
+
+**Display Includes**:
+- Patient and optometrist information
+- All clinical data and recommendations
+- Visual acuity measurements for both eyes
+- Company details (from `CompanyDetail::getAll()`)
+- Creation timestamp with human-readable format
+
+### Editing Prescriptions
+
+The edit form pre-populates all existing data:
+
+```php
+// Transform prescription data for the form
+$prescriptionData = $prescription->toArray();
+$prescriptionData['motivos_consulta'] = $prescription->motivos->pluck('id')->all();
+$prescriptionData['estado_salud_actual'] = $prescription->estadoActual->pluck('id')->all();
+$prescriptionData['historia_ocular_familiar'] = $prescription->historiaOcularFamiliar->pluck('id')->all();
+```
+
+All mastertable relationships are transformed to ID arrays for easy form binding.
+
+<Warning>
+Editing a prescription creates a new version in some systems. Check your business requirements before allowing prescription edits.
+</Warning>
+
+## Linking Prescriptions to Workflow Jobs
+
+Prescriptions can be linked to workflow jobs via the `prescription_id` field on `WorkflowJob`:
+
+```php
+// app/Models/WorkflowJob.php
+public function prescription(): BelongsTo
+{
+    return $this->belongsTo(Prescription::class);
+}
+```
+
+### Workflow Integration
+
+Workflows can require prescriptions:
+
+```php
+// app/Models/Workflow.php
+'prescription_requirement' => 'optional' | 'required'
+```
+
+**Use Cases**:
+- **Required**: Prescription eyewear orders must have a prescription
+- **Optional**: Contact lens orders may or may not need a new prescription
+
+<Info>
+When a workflow requires a prescription, the job creation form will enforce this requirement before allowing the job to be saved.
+</Info>
+
+## PDF Generation
+
+OptiFlow automatically generates professional PDF prescriptions using the `DownloadPrescriptionController`.
+
+### How It Works
+
+```php
+// app/Http/Controllers/DownloadPrescriptionController.php
+public function __invoke(Prescription $prescription): Response
+{
+    $prescription->load([
+        'motivos',
+        'estadoActual',
+        'historiaOcularFamiliar',
+        'lentesRecomendados',
+        'gotasRecomendadas',
+        'monturasRecomendadas',
+        'workspace',
+        'patient',
+        'optometrist',
+    ]);
+
+    $pdf = Pdf::loadView('prescriptions.pdf', [
+        'prescription' => $prescription,
+        'company' => CompanyDetail::getAll(),
+    ])->setPaper('a4', 'portrait');
+
+    $filename = "receta-{$prescription->patient->name}-{$prescription->id}.pdf";
+
+    return $pdf->stream($filename);
+}
+```
+
+### PDF Contents
+
+The generated PDF includes:
+- Company logo and details
+- Patient information (name, contact details)
+- Optometrist information
+- Examination date
+- Visual acuity measurements (right and left eye)
+- Clinical data (consultation reasons, health status, family history)
+- Recommendations (lenses, frames, eye drops)
+- Professional formatting and layout
+
+### Downloading PDFs
+
+Users can download prescription PDFs from:
+- The prescription detail page
+- The prescriptions table (action menu)
+- Direct link: `/prescriptions/{id}/download`
+
+<Note>
+PDFs are generated on-demand using DomPDF. The `DOMPDF_ENABLE_REMOTE` constant is set to `false` for security.
+</Note>
+
+## Prescription Reports
+
+OptiFlow includes built-in prescription reports:
+
+### Prescriptions Summary Report
+
+```php
+// app/Reports/PrescriptionsSummaryReport.php
+// Provides overview of prescriptions over time
+```
+
+**Metrics**:
+- Total prescriptions created
+- Prescriptions by optometrist
+- Prescriptions by time period
+- Most common recommendations
+
+### Prescriptions by Doctor Report
+
+```php
+// app/Reports/PrescriptionsByDoctorReport.php
+// Breaks down prescription volume by optometrist
+```
+
+**Insights**:
+- Which optometrists are most active
+- Average prescriptions per doctor
+- Trends over time
+
+<Tip>
+Use these reports for performance tracking, resource planning, and understanding your optometry service utilization.
+</Tip>
+
+## Mastertable Integration
+
+Prescriptions use mastertables for standardized clinical data.
+
+### Available Mastertables
+
+- `motivos_consulta` - Consultation reasons
+- `estado_salud_actual` - Current health status
+- `historia_ocular_familiar` - Family eye history
+- `tipos_de_lentes` - Lens types
+- `tipos_de_montura` - Frame types
+- `tipos_de_gotas` - Eye drop types
+
+### Many-to-Many Relationships
+
+Prescriptions use pivot tables to link multiple items:
+
+```php
+public function lentesRecomendados(): BelongsToMany
+{
+    return $this->belongsToMany(
+        MastertableItem::class,
+        'prescription_item',
+        'prescription_id',
+        'mastertable_item_id'
+    )
+    ->wherePivot('mastertable_alias', 'tipos_de_lentes')
+    ->withPivot('mastertable_alias');
+}
+```
+
+This allows prescriptions to have multiple recommendations (e.g., both progressive and anti-reflective lenses).
+
+<Info>
+Mastertables are customizable. Optical stores can add their own consultation reasons, lens types, and recommendations specific to their practice.
+</Info>
+
+## Permissions
+
+Prescription access is controlled by permissions:
+
+- `PrescriptionsView` - View prescriptions
+- `PrescriptionsCreate` - Create new prescriptions
+- `PrescriptionsEdit` - Modify existing prescriptions
+
+```php
+// Example permission check in controller
+abort_unless($user->can(Permission::PrescriptionsCreate), 403);
+```
+
+<Warning>
+Ensure that only qualified optometrists have permission to create and edit prescriptions. Prescriptions are medical documents and should be treated with appropriate access controls.
+</Warning>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Verify Patient Information">
+    Always double-check patient details before creating a prescription. Incorrect patient linking can cause serious issues.
+  </Accordion>
+  
+  <Accordion title="Complete All Measurements">
+    Fill in all visual acuity fields. Incomplete prescriptions may not be usable by labs or dispensing staff.
+  </Accordion>
+  
+  <Accordion title="Link to Workflow Jobs">
+    When creating prescription eyewear orders, link the prescription to the workflow job for complete tracking.
+  </Accordion>
+  
+  <Accordion title="Generate PDFs Immediately">
+    After creating a prescription, generate and review the PDF to ensure all data appears correctly.
+  </Accordion>
+  
+  <Accordion title="Use Mastertables Consistently">
+    Standardize your mastertable items across all optometrists for consistent reporting and data analysis.
+  </Accordion>
+  
+  <Accordion title="Regular Backups">
+    Prescription data is critical. Ensure your workspace includes prescriptions in regular database backups.
+  </Accordion>
+</AccordionGroup>
+
+## Integration with Automations
+
+Prescriptions can trigger automations when linked to workflow jobs:
+
+**Example Automation**:
+When a job with a prescription enters the "Ready for Pickup" stage, automatically send the prescription PDF to the customer via WhatsApp.
+
+```php
+// In automation context:
+$context = new AutomationContext(
+    job: $workflowJob,
+    // ...
+);
+
+// Prescription is accessible via:
+$workflowJob->prescription
+```
+
+<Tip>
+Combine prescriptions with automations to automatically notify customers when their prescription eyewear is ready and include the prescription PDF for their records.
+</Tip>
+
+## Common Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Eye Exam to Order" icon="eye">
+    Create prescription during eye exam, then immediately create a workflow job for eyewear order.
+  </Card>
+  
+  <Card title="Prescription History" icon="clock-rotate-left">
+    View patient's complete prescription history to track vision changes over time.
+  </Card>
+  
+  <Card title="Insurance Claims" icon="file-invoice-dollar">
+    Generate prescription PDFs for insurance claim submissions.
+  </Card>
+  
+  <Card title="Lab Orders" icon="flask">
+    Include prescription details when sending orders to external lens labs.
+  </Card>
+</CardGroup>
+
+## Prescription Lifecycle
+
+<Steps>
+  <Step title="Examination">
+    Optometrist performs eye examination and determines prescription values.
+  </Step>
+  
+  <Step title="Creation">
+    Prescription is created in OptiFlow with all measurements and recommendations.
+  </Step>
+  
+  <Step title="Review">
+    Optometrist reviews the prescription and generates PDF for patient.
+  </Step>
+  
+  <Step title="Order Creation">
+    If patient wants eyewear, create a workflow job and link the prescription.
+  </Step>
+  
+  <Step title="Fulfillment">
+    Workflow job progresses through stages. Prescription data is available at each stage.
+  </Step>
+  
+  <Step title="Delivery">
+    Customer receives eyewear along with printed prescription for their records.
+  </Step>
+</Steps>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Workflows Overview" icon="diagram-project" href="/workflows/overview">
+    Learn how prescriptions integrate with workflows
+  </Card>
+  
+  <Card title="Building Automations" icon="robot" href="/workflows/automations">
+    Automate prescription delivery and notifications
+  </Card>
+</CardGroup>

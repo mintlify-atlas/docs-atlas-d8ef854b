@@ -1,0 +1,136 @@
+---
+title: Workflows & Automation Overview
+description: Understand workflows and automation capabilities in OptiFlow for optical store management
+---
+
+## What are Workflows?
+
+Workflows in OptiFlow are structured processes that guide your optical store operations from start to finish. Each workflow represents a business process with multiple stages, custom fields, and configurable requirements.
+
+### Key Workflow Components
+
+- **Stages**: Sequential steps that jobs move through (e.g., "Order Received" → "Lens Cutting" → "Quality Check" → "Ready for Pickup")
+- **Fields**: Custom data fields specific to each workflow (text, numbers, dates, selections)
+- **Jobs**: Individual work items that flow through the workflow stages
+- **Requirements**: Optional or required invoices and prescriptions per workflow
+
+### Workflow Features
+
+<CardGroup cols={2}>
+  <Card title="Multi-Stage Processing" icon="list-check">
+    Define custom stages with colors, positions, and activation states. Mark initial and final stages for clear workflow boundaries.
+  </Card>
+  
+  <Card title="Custom Fields" icon="input-text">
+    Add workflow-specific fields including text, textarea, numbers, dates, selections, and boolean values with validation.
+  </Card>
+  
+  <Card title="Job Tracking" icon="briefcase">
+    Track jobs with contacts, invoices, prescriptions, priorities, due dates, and rich metadata throughout the workflow.
+  </Card>
+  
+  <Card title="Event History" icon="clock-rotate-left">
+    Automatically capture workflow events with timestamps, stage transitions, and user actions.
+  </Card>
+</CardGroup>
+
+## What is Automation?
+
+Automation in OptiFlow allows you to create smart, event-driven workflows that automatically perform actions when specific triggers occur. Build visual automation flows without writing code.
+
+### Automation Capabilities
+
+**Trigger Events**:
+- Workflow stage changes (when a job enters a specific stage)
+- Invoice creation and updates
+- Custom business events
+
+**Available Actions**:
+- Send WhatsApp messages to customers
+- Send Telegram notifications to staff
+- Execute webhooks to external systems
+- Conditional logic based on workflow data
+
+### Visual Automation Builder
+
+OptiFlow includes a powerful drag-and-drop automation builder powered by ReactFlow:
+
+- **Node-Based Interface**: Connect triggers, actions, and conditions visually
+- **Real-Time Preview**: See your automation flow as you build it
+- **Template Variables**: Use dynamic data like contact names, invoice totals, and job details
+- **Version Control**: Automations are versioned for safe updates
+- **Testing Tools**: Test automations with sample data before activating
+
+<Note>
+Automations run asynchronously using Laravel's queue system, ensuring your application remains responsive even during complex automation executions.
+</Note>
+
+## Workflows vs Automations
+
+| Feature | Workflows | Automations |
+|---------|-----------|-------------|
+| **Purpose** | Structure business processes | Automate repetitive actions |
+| **Interaction** | Manual stage transitions | Event-triggered actions |
+| **Configuration** | Stages and fields | Triggers and action nodes |
+| **Execution** | User-driven | Automatic |
+| **Use Case** | Order fulfillment process | Send notifications when order is ready |
+
+## Common Use Cases for Optical Stores
+
+<Steps>
+  <Step title="Order Processing Workflow">
+    Create a workflow for prescription eyewear orders with stages like "Order Placed" → "Lens Ordered" → "Frame Assembly" → "Quality Check" → "Ready for Pickup".
+  </Step>
+  
+  <Step title="Customer Notifications">
+    Build an automation that sends WhatsApp messages to customers when their order enters the "Ready for Pickup" stage.
+  </Step>
+  
+  <Step title="Staff Alerts">
+    Set up Telegram notifications to alert opticians when a high-priority job enters the "Quality Check" stage.
+  </Step>
+  
+  <Step title="Prescription Management">
+    Link prescriptions to workflow jobs and automatically generate PDFs when jobs are completed.
+  </Step>
+</Steps>
+
+## Benefits
+
+<AccordionGroup>
+  <Accordion title="Improved Efficiency">
+    Standardize processes across your optical store with consistent workflows. Reduce manual tasks through automation.
+  </Accordion>
+  
+  <Accordion title="Better Customer Communication">
+    Keep customers informed automatically with timely notifications about their orders via WhatsApp.
+  </Accordion>
+  
+  <Accordion title="Enhanced Visibility">
+    Track job progress in real-time. View complete history of stage transitions and actions.
+  </Accordion>
+  
+  <Accordion title="Reduced Errors">
+    Automation ensures consistent communication and actions. Required fields prevent incomplete data.
+  </Accordion>
+  
+  <Accordion title="Scalability">
+    Handle more orders without increasing manual overhead. Automations scale effortlessly.
+  </Accordion>
+</AccordionGroup>
+
+## Getting Started
+
+<CardGroup cols={2}>
+  <Card title="Building Automations" icon="robot" href="/workflows/automations">
+    Learn how to create visual automations with triggers and actions
+  </Card>
+  
+  <Card title="Prescription Management" icon="file-prescription" href="/workflows/prescriptions">
+    Manage prescriptions and link them to workflow jobs
+  </Card>
+</CardGroup>
+
+<Tip>
+Start with simple automations like sending a WhatsApp message when a job reaches a specific stage, then expand to more complex multi-step workflows as you become comfortable with the builder.
+</Tip>

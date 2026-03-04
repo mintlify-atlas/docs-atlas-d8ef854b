@@ -1,0 +1,236 @@
+---
+title: Multi-Workspace Management
+description: Manage multiple business workspaces with isolated data, team collaboration, and flexible access control
+---
+
+## Overview
+
+OptiFlow's multi-workspace feature enables you to manage multiple business entities, branches, or departments within a single OptiFlow account. Each workspace maintains complete data isolation while allowing seamless switching between different business contexts.
+
+<Info>
+Workspaces are perfect for managing multiple stores, franchises, or business units with separate inventories, customers, and financial records.
+</Info>
+
+## Key Capabilities
+
+<CardGroup cols={2}>
+  <Card title="Data Isolation" icon="shield">
+    Each workspace maintains its own products, contacts, invoices, and inventory completely separate from other workspaces.
+  </Card>
+  
+  <Card title="Team Collaboration" icon="users">
+    Invite team members to specific workspaces with role-based access control (owner, admin, member).
+  </Card>
+  
+  <Card title="Quick Switching" icon="repeat">
+    Switch between workspaces instantly without logging out, with your current workspace persisted in your session.
+  </Card>
+  
+  <Card title="Workspace Settings" icon="gear">
+    Configure workspace-specific settings, preferences, and business information for each entity.
+  </Card>
+</CardGroup>
+
+## Creating a Workspace
+
+Workspaces can be created from your account dashboard:
+
+```php
+// Workspace model attributes
+$workspace = Workspace::create([
+    'name' => 'Main Store',
+    'slug' => 'main-store', // Auto-generated from name
+    'description' => 'Our flagship retail location',
+    'address' => '123 Main Street',
+    'phone' => '+1-555-0100',
+    'owner_id' => auth()->id(),
+    'is_active' => true,
+    'settings' => [
+        // Custom workspace settings
+    ],
+]);
+```
+
+### Workspace Properties
+
+- **Name**: Display name for the workspace
+- **Slug**: URL-friendly identifier (auto-generated)
+- **Code**: Optional workspace code for identification
+- **Description**: Brief description of the workspace
+- **Address & Phone**: Business contact information
+- **Owner**: User who created and owns the workspace
+- **Settings**: JSON-encoded custom settings
+- **Status**: Active/inactive flag
+
+## Managing Team Members
+
+### Adding Users to a Workspace
+
+Invite team members to collaborate within a workspace:
+
+```php
+// Add a user to workspace with role
+$workspace->addUser($user, 'member');
+
+// Check if user has access
+if ($workspace->hasUser($user)) {
+    // User is a member
+}
+
+// Get workspace members count
+$memberCount = $workspace->members_count;
+```
+
+### User Roles
+
+<Tabs>
+  <Tab title="Owner">
+    - Full control over workspace
+    - Can delete workspace
+    - Can manage all members
+    - Assigned at workspace creation
+  </Tab>
+  
+  <Tab title="Admin">
+    - Can manage workspace settings
+    - Can invite/remove members
+    - Cannot delete workspace
+  </Tab>
+  
+  <Tab title="Member">
+    - Access to workspace data
+    - Can create and edit records
+    - Limited administrative access
+  </Tab>
+</Tabs>
+
+### Removing Team Members
+
+```php
+// Remove a user from workspace
+$workspace->removeUser($user);
+```
+
+## Workspace Switching
+
+Users can switch between workspaces they have access to:
+
+```php
+// User's current workspace is stored in their profile
+$user->current_workspace_id; // ID of active workspace
+
+// Get all workspaces user has access to
+$workspaces = $user->workspaces;
+
+// Switch to different workspace
+$user->update(['current_workspace_id' => $workspace->id]);
+```
+
+<Note>
+Your current workspace selection persists across sessions, so you'll return to the same workspace when you log back in.
+</Note>
+
+## Workspace Scoping
+
+OptiFlow automatically filters data based on the current workspace using the `BelongsToWorkspace` trait:
+
+```php
+// Models are automatically scoped to current workspace
+$products = Product::all(); // Only products in current workspace
+
+// Access workspace relationship
+$invoice->workspace; // Get workspace for an invoice
+$invoice->workspace_id; // Get workspace ID
+
+// Query across all workspaces (admin only)
+$allProducts = Product::withoutWorkspaceScope()->get();
+```
+
+The following models are workspace-scoped:
+- Contacts (customers and suppliers)
+- Products and ProductStock
+- Invoices and Quotations
+- Inventory movements
+- Prescriptions and workflow jobs
+
+## Workspace-Specific Features
+
+### Document Subtypes
+
+Each workspace can have preferred document subtypes:
+
+```php
+// Set preferred invoice document subtype
+$workspace->documentSubtypes()->attach($documentSubtype->id, [
+    'is_preferred' => true
+]);
+
+// Get preferred document subtype
+$preferredType = $workspace->getPreferredDocumentSubtype();
+```
+
+### Workspace Invitations
+
+Send email invitations to join a workspace:
+
+```php
+// Get pending invitations for workspace
+$invitations = $workspace->invitations;
+
+// Invitations include email, role, and status
+```
+
+## Use Cases
+
+<AccordionGroup>
+  <Accordion title="Multi-Store Retail Chain">
+    Create a workspace for each retail location. Each store manages its own inventory, customers, and sales while maintaining centralized oversight.
+  </Accordion>
+  
+  <Accordion title="Franchise Management">
+    Set up separate workspaces for each franchise location with independent operations and reporting.
+  </Accordion>
+  
+  <Accordion title="Department Separation">
+    Organize different business departments (retail, wholesale, e-commerce) as separate workspaces.
+  </Accordion>
+  
+  <Accordion title="Multi-Business Owner">
+    Manage completely separate businesses from a single OptiFlow account.
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<CardGroup cols={1}>
+  <Card title="Naming Convention">
+    Use clear, descriptive names that identify the workspace's purpose (e.g., "Downtown Store", "Wholesale Division").
+  </Card>
+  
+  <Card title="Team Organization">
+    Assign appropriate roles to team members based on their responsibilities and required access level.
+  </Card>
+  
+  <Card title="Regular Audits">
+    Periodically review workspace members and remove access for users who no longer need it.
+  </Card>
+</CardGroup>
+
+## API Reference
+
+Key workspace model methods:
+
+- `addUser(User $user, string $role)` - Add a user to the workspace
+- `removeUser(User $user)` - Remove a user from the workspace
+- `hasUser(User $user)` - Check if user has access
+- `getPreferredDocumentSubtype()` - Get preferred document type
+- `members()` - Relationship to workspace users
+- `invoices()` - Get all invoices in workspace
+- `prescriptions()` - Get all prescriptions in workspace
+
+## Related Resources
+
+- [Contact Management](/features/contacts)
+- [Product Catalog](/features/product-catalog)
+- [Inventory Management](/features/inventory-management)
+- [User Permissions](/admin/user-roles)

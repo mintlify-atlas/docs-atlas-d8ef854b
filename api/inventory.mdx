@@ -1,0 +1,611 @@
+---
+title: 'Inventory Endpoints'
+description: 'Manage stock levels, transfers, and adjustments via the API'
+icon: 'warehouse'
+---
+
+## Overview
+
+The Inventory API allows you to manage product stock levels across multiple workspaces, perform stock transfers, record adjustments, and track stock movements.
+
+<Note>
+  Inventory operations are workspace-specific. Stock levels are tracked separately for each workspace (location).
+</Note>
+
+## Stock Movement Object
+
+<ResponseField name="id" type="integer">
+  Unique identifier for the stock movement
+</ResponseField>
+
+<ResponseField name="product_id" type="integer">
+  Product ID
+</ResponseField>
+
+<ResponseField name="type" type="enum">
+  Movement type: `sale`, `purchase`, `transfer_out`, `transfer_in`, `adjustment`, `initial_stock`
+</ResponseField>
+
+<ResponseField name="quantity" type="decimal">
+  Quantity moved (negative for outgoing, positive for incoming)
+</ResponseField>
+
+<ResponseField name="from_workspace_id" type="integer">
+  Source workspace (for transfers and sales)
+</ResponseField>
+
+<ResponseField name="to_workspace_id" type="integer">
+  Destination workspace (for transfers and purchases)
+</ResponseField>
+
+<ResponseField name="reference" type="string">
+  Reference number or description
+</ResponseField>
+
+<ResponseField name="notes" type="string">
+  Additional notes
+</ResponseField>
+
+<ResponseField name="related_invoice_id" type="integer">
+  Associated invoice (for sales)
+</ResponseField>
+
+<ResponseField name="created_by" type="integer">
+  User who created the movement
+</ResponseField>
+
+<ResponseField name="created_at" type="timestamp">
+  Creation timestamp
+</ResponseField>
+
+---
+
+## List Stock Transfers
+
+<api>GET /stock-transfers</api>
+
+Retrieve a list of stock transfers for the current workspace.
+
+### Query Parameters
+
+<ParamField query="page" type="integer" default="1">
+  Page number for pagination
+</ParamField>
+
+<ParamField query="per_page" type="integer" default="15">
+  Number of items per page
+</ParamField>
+
+<ParamField query="filter[product_id]" type="integer">
+  Filter by product ID
+</ParamField>
+
+<ParamField query="filter[type]" type="string">
+  Filter by transfer type: `transfer_out`, `transfer_in`
+</ParamField>
+
+<ParamField query="sort" type="string" default="-created_at">
+  Sort field
+</ParamField>
+
+### Response
+
+<CodeGroup>
+
+```json 200 OK
+{
+  "data": [
+    {
+      "id": 450,
+      "product_id": 78,
+      "type": "transfer_out",
+      "quantity": "-50.00",
+      "from_workspace_id": 2,
+      "to_workspace_id": 3,
+      "reference": "TRF-2024-001",
+      "notes": "Stock transfer to warehouse",
+      "product": {
+        "id": 78,
+        "name": "Premium Product",
+        "sku": "PROD-001"
+      },
+      "from_workspace": {
+        "id": 2,
+        "name": "Main Store"
+      },
+      "to_workspace": {
+        "id": 3,
+        "name": "Warehouse"
+      },
+      "created_by": {
+        "id": 5,
+        "name": "John Doe"
+      },
+      "created_at": "2024-03-20T10:30:00Z"
+    }
+  ],
+  "meta": {
+    "current_page": 1,
+    "last_page": 4,
+    "per_page": 15,
+    "total": 52
+  }
+}
+```
+
+</CodeGroup>
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -X GET https://acme.yourdomain.com/api/v1/stock-transfers \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "X-Workspace-ID: 2" \
+  -H "Accept: application/json"
+```
+
+```php PHP
+$transfers = Http::withToken($token)
+    ->withHeaders(['X-Workspace-ID' => 2])
+    ->get('https://acme.yourdomain.com/api/v1/stock-transfers')
+    ->json('data');
+```
+
+```javascript JavaScript
+const { data: transfers } = await fetch(
+  'https://acme.yourdomain.com/api/v1/stock-transfers',
+  {
+    headers: {
+      'Authorization': 'Bearer YOUR_TOKEN',
+      'X-Workspace-ID': '2',
+      'Accept': 'application/json'
+    }
+  }
+).then(r => r.json());
+```
+
+</CodeGroup>
+
+---
+
+## Get Stock Transfer
+
+<api>GET /stock-transfers/{id}</api>
+
+Retrieve details of a specific stock transfer.
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  Stock movement ID
+</ParamField>
+
+### Response
+
+```json
+{
+  "data": {
+    "id": 450,
+    "product_id": 78,
+    "type": "transfer_out",
+    "quantity": "-50.00",
+    "from_workspace_id": 2,
+    "to_workspace_id": 3,
+    "reference": "TRF-2024-001",
+    "notes": "Stock transfer to warehouse",
+    "product": {
+      "id": 78,
+      "name": "Premium Product",
+      "sku": "PROD-001",
+      "current_stock": "100.00"
+    },
+    "from_workspace": {
+      "id": 2,
+      "name": "Main Store"
+    },
+    "to_workspace": {
+      "id": 3,
+      "name": "Warehouse"
+    },
+    "created_by": {
+      "id": 5,
+      "name": "John Doe",
+      "email": "john@example.com"
+    },
+    "created_at": "2024-03-20T10:30:00Z"
+  }
+}
+```
+
+---
+
+## Create Stock Transfer
+
+<api>POST /stock-transfers</api>
+
+Transfer stock from the current workspace to another workspace.
+
+### Request Body
+
+<ParamField body="product_id" type="integer" required>
+  Product ID to transfer
+</ParamField>
+
+<ParamField body="to_workspace_id" type="integer" required>
+  Destination workspace ID
+</ParamField>
+
+<ParamField body="quantity" type="decimal" required>
+  Quantity to transfer (must be positive)
+</ParamField>
+
+<ParamField body="reference" type="string">
+  Reference number or code
+</ParamField>
+
+<ParamField body="notes" type="string">
+  Additional notes about the transfer
+</ParamField>
+
+### Response
+
+<CodeGroup>
+
+```json 201 Created
+{
+  "data": {
+    "id": 451,
+    "product_id": 78,
+    "type": "transfer_out",
+    "quantity": "50.00",
+    "from_workspace_id": 2,
+    "to_workspace_id": 3,
+    "created_at": "2024-03-20T11:00:00Z"
+  },
+  "message": "Stock transfer completed successfully."
+}
+```
+
+```json 422 Validation Error
+{
+  "message": "The given data was invalid.",
+  "errors": {
+    "quantity": [
+      "Insufficient stock. Available: 30, Requested: 50"
+    ]
+  }
+}
+```
+
+</CodeGroup>
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://acme.yourdomain.com/api/v1/stock-transfers \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "X-Workspace-ID: 2" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "product_id": 78,
+    "to_workspace_id": 3,
+    "quantity": 50,
+    "reference": "TRF-2024-002",
+    "notes": "Monthly inventory transfer"
+  }'
+```
+
+```php PHP
+$transfer = Http::withToken($token)
+    ->withHeaders(['X-Workspace-ID' => 2])
+    ->post('https://acme.yourdomain.com/api/v1/stock-transfers', [
+        'product_id' => 78,
+        'to_workspace_id' => 3,
+        'quantity' => 50,
+        'reference' => 'TRF-2024-002',
+        'notes' => 'Monthly inventory transfer',
+    ])
+    ->json('data');
+```
+
+```javascript JavaScript
+const { data: transfer } = await fetch(
+  'https://acme.yourdomain.com/api/v1/stock-transfers',
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer YOUR_TOKEN',
+      'X-Workspace-ID': '2',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      product_id: 78,
+      to_workspace_id: 3,
+      quantity: 50,
+      reference: 'TRF-2024-002',
+      notes: 'Monthly inventory transfer'
+    })
+  }
+).then(r => r.json());
+```
+
+</CodeGroup>
+
+<Warning>
+  Stock transfers create two movements: a `transfer_out` in the source workspace and a `transfer_in` in the destination workspace. Both workspaces must belong to the same tenant.
+</Warning>
+
+---
+
+## List Inventory Adjustments
+
+<api>GET /inventory-adjustments</api>
+
+Retrieve a list of inventory adjustments (manual stock corrections).
+
+### Response
+
+Similar structure to stock transfers, with type `adjustment`.
+
+---
+
+## Create Inventory Adjustment
+
+<api>POST /inventory-adjustments</api>
+
+Create a manual inventory adjustment to correct stock levels.
+
+### Request Body
+
+<ParamField body="items" type="array" required>
+  Array of products to adjust
+</ParamField>
+
+<ParamField body="items[].product_id" type="integer" required>
+  Product ID
+</ParamField>
+
+<ParamField body="items[].quantity_adjustment" type="decimal" required>
+  Adjustment quantity (positive to increase, negative to decrease)
+</ParamField>
+
+<ParamField body="items[].reason" type="string" required>
+  Reason for adjustment: `damaged`, `lost`, `found`, `recount`, `other`
+</ParamField>
+
+<ParamField body="items[].notes" type="string">
+  Additional notes
+</ParamField>
+
+<ParamField body="reference" type="string">
+  Reference number
+</ParamField>
+
+### Response
+
+```json
+{
+  "data": {
+    "id": 25,
+    "workspace_id": 2,
+    "reference": "ADJ-2024-003",
+    "items": [
+      {
+        "product_id": 78,
+        "quantity_adjustment": "-5.00",
+        "reason": "damaged",
+        "notes": "Water damage from roof leak"
+      }
+    ],
+    "created_at": "2024-03-20T12:00:00Z"
+  },
+  "message": "Inventory adjustment created successfully."
+}
+```
+
+### Example
+
+```bash
+curl -X POST https://acme.yourdomain.com/api/v1/inventory-adjustments \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "X-Workspace-ID: 2" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "reference": "ADJ-2024-003",
+    "items": [
+      {
+        "product_id": 78,
+        "quantity_adjustment": -5,
+        "reason": "damaged",
+        "notes": "Water damage from roof leak"
+      }
+    ]
+  }'
+```
+
+<Note>
+  Inventory adjustments create stock movements with type `adjustment` and update the product's stock level in the current workspace.
+</Note>
+
+---
+
+## Set Initial Stock
+
+<api>POST /initial-stock</api>
+
+Set initial stock levels when first setting up inventory tracking for existing products.
+
+### Request Body
+
+<ParamField body="items" type="array" required>
+  Array of products with initial stock
+</ParamField>
+
+<ParamField body="items[].product_id" type="integer" required>
+  Product ID
+</ParamField>
+
+<ParamField body="items[].quantity" type="decimal" required>
+  Initial quantity
+</ParamField>
+
+<ParamField body="items[].cost" type="decimal">
+  Cost per unit (optional)
+</ParamField>
+
+### Response
+
+```json
+{
+  "message": "Initial stock set for 15 products.",
+  "summary": {
+    "total_products": 15,
+    "total_quantity": "1250.00",
+    "total_value": "45000.00"
+  }
+}
+```
+
+---
+
+## Get Product Stock by Workspace
+
+<api>GET /products/{id}/stock</api>
+
+Get stock levels for a specific product across all workspaces.
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  Product ID
+</ParamField>
+
+### Response
+
+```json
+{
+  "data": {
+    "product_id": 78,
+    "product_name": "Premium Product",
+    "total_stock": "250.00",
+    "workspace_stocks": [
+      {
+        "workspace_id": 1,
+        "workspace_name": "Main Store",
+        "quantity": "100.00",
+        "minimum_quantity": "20.00",
+        "is_low_stock": false
+      },
+      {
+        "workspace_id": 2,
+        "workspace_name": "Warehouse",
+        "quantity": "150.00",
+        "minimum_quantity": "50.00",
+        "is_low_stock": false
+      }
+    ]
+  }
+}
+```
+
+---
+
+## Low Stock Alerts
+
+<api>GET /inventory/low-stock</api>
+
+Get products with stock below minimum quantity threshold.
+
+### Query Parameters
+
+<ParamField query="workspace_id" type="integer">
+  Filter by specific workspace (defaults to current workspace)
+</ParamField>
+
+### Response
+
+```json
+{
+  "data": [
+    {
+      "product_id": 85,
+      "product_name": "Another Product",
+      "sku": "PROD-085",
+      "workspace_id": 2,
+      "workspace_name": "Main Store",
+      "current_quantity": "8.00",
+      "minimum_quantity": "20.00",
+      "deficit": "12.00"
+    }
+  ]
+}
+```
+
+---
+
+## Stock Movements Report
+
+<api>GET /stock-movements</api>
+
+Get detailed stock movements for auditing and reporting.
+
+### Query Parameters
+
+<ParamField query="product_id" type="integer">
+  Filter by product
+</ParamField>
+
+<ParamField query="workspace_id" type="integer">
+  Filter by workspace
+</ParamField>
+
+<ParamField query="type" type="string">
+  Filter by movement type
+</ParamField>
+
+<ParamField query="date_from" type="date">
+  Start date (YYYY-MM-DD)
+</ParamField>
+
+<ParamField query="date_to" type="date">
+  End date (YYYY-MM-DD)
+</ParamField>
+
+### Response
+
+```json
+{
+  "data": [
+    {
+      "id": 450,
+      "product_id": 78,
+      "product_name": "Premium Product",
+      "type": "sale",
+      "quantity": "-10.00",
+      "workspace_id": 2,
+      "reference": "INV-0042",
+      "created_at": "2024-03-20T10:30:00Z"
+    }
+  ]
+}
+```
+
+---
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Products" icon="box" href="/api/products">
+    Manage product catalog
+  </Card>
+  <Card title="Workspaces" icon="building" href="/api/workspaces">
+    Manage workspace locations
+  </Card>
+  <Card title="Invoices" icon="file-invoice" href="/api/invoices">
+    Stock is reduced when invoices are created
+  </Card>
+</CardGroup>

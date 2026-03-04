@@ -1,0 +1,627 @@
+---
+title: Tax Configuration
+description: Complete guide to setting up and managing taxes in OptiFlow
+---
+
+Proper tax configuration is essential for accurate invoicing, compliance, and financial reporting. OptiFlow supports multiple tax types, rates, and complex tax scenarios.
+
+## Overview
+
+Tax features in OptiFlow:
+- Multiple tax types (VAT, sales tax, withholding, etc.)
+- Multiple tax rates per transaction
+- Exclusive and inclusive tax calculations
+- Default taxes for products
+- Tax reporting and compliance
+- Multi-tax line items
+
+## Tax Types
+
+OptiFlow supports different tax classifications:
+
+| Type | Description | Calculation | Use Case |
+|------|-------------|-------------|----------|
+| ITBIS | Value Added Tax | Exclusive | Dominican Republic VAT (18%) |
+| ISC | Selective Consumption Tax | Exclusive | Luxury goods, alcohol, tobacco |
+| Withholding | Income Tax Withholding | Exclusive | Professional services withholding |
+| Sales Tax | General Sales Tax | Exclusive/Inclusive | State/local sales taxes |
+
+Reference: `TaxType` enum in `app/Enums/TaxType.php`
+
+### Exclusive vs. Inclusive Taxes
+
+**Exclusive Taxes** (most common):
+- Tax is added to the subtotal
+- Calculation: Subtotal + (Subtotal × Tax Rate) = Total
+- Example: $100 + ($100 × 18%) = $118
+
+**Inclusive Taxes**:
+- Tax is already included in the price
+- Calculation: Total ÷ (1 + Tax Rate) = Subtotal
+- Example: $118 ÷ 1.18 = $100 subtotal, $18 tax
+
+```php
+// From TaxType enum
+public function isExclusive(): bool
+{
+    return match($this) {
+        self::ITBIS, self::ISC, self::WITHHOLDING => true,
+        self::INCLUSIVE_VAT => false,
+    };
+}
+```
+
+## Creating Tax Rates
+
+<Steps>
+
+<Step title="Navigate to Tax Configuration">
+Go to **Settings** → **Taxes** → **Create Tax**
+
+Reference: `TaxController::create()` in `app/Http/Controllers/TaxController.php:66`
+</Step>
+
+<Step title="Enter Tax Details">
+
+**Required Fields**:
+
+**Name**: Descriptive name for the tax
+- Examples: "ITBIS 18%", "ISC Alcoholes 10%", "Retención 10%"
+- Should clearly indicate the purpose and rate
+
+**Type**: Select tax classification
+- ITBIS (VAT)
+- ISC (Selective Consumption)
+- Withholding
+- Sales Tax
+- Other
+
+**Rate**: Tax percentage
+- Enter as a number (e.g., 18 for 18%)
+- Supports up to 2 decimal places (e.g., 7.5 for 7.5%)
+- Can be 0 for exempt/zero-rated items
+
+**Default**: Mark as default (checkbox)
+- Default taxes are pre-selected when creating invoices
+- Useful for commonly applied taxes like standard VAT
+
+```php
+// Tax model fillable fields
+protected $fillable = [
+    'name',
+    'type',
+    'rate',
+    'is_default',
+];
+```
+</Step>
+
+<Step title="Save Tax">
+Click **Create Tax**
+
+The tax is now available for:
+- Invoice line items
+- Quotation line items  
+- Product default tax configuration
+- Tax reports
+
+Reference: `CreateTaxAction::handle()` in `app/Actions/CreateTaxAction.php`
+</Step>
+
+</Steps>
+
+## Tax Configuration Examples
+
+### Dominican Republic Standard Setup
+
+<Steps>
+
+<Step title="Create ITBIS 18%">
+- Name: "ITBIS 18%"
+- Type: ITBIS
+- Rate: 18
+- Default: ✓ Yes
+</Step>
+
+<Step title="Create ITBIS Reduced Rate">
+- Name: "ITBIS 16% (Reducido)"
+- Type: ITBIS
+- Rate: 16
+- Default: ✗ No
+</Step>
+
+<Step title="Create ISC for Alcohol">
+- Name: "ISC Alcoholes 10%"
+- Type: ISC
+- Rate: 10
+- Default: ✗ No
+</Step>
+
+<Step title="Create Withholding">
+- Name: "Retención 10%"
+- Type: Withholding
+- Rate: 10
+- Default: ✗ No
+</Step>
+
+<Step title="Create Exempt">
+- Name: "Exento"
+- Type: ITBIS
+- Rate: 0
+- Default: ✗ No
+</Step>
+
+</Steps>
+
+## Setting Default Product Taxes
+
+Assign default taxes to products for faster invoice creation:
+
+<Steps>
+
+<Step title="Edit Product">
+Navigate to **Products** → Select product → **Edit**
+</Step>
+
+<Step title="Select Default Tax">
+Choose the tax that typically applies to this product:
+- Standard products: ITBIS 18%
+- Alcohol/tobacco: ISC + ITBIS
+- Exempt items: Exento (0%)
+- Services: Withholding tax
+</Step>
+
+<Step title="Save Product">
+When this product is added to an invoice, the default tax is automatically selected
+</Step>
+
+</Steps>
+
+<Note>
+Default taxes are suggestions only. Users can still modify or add taxes when creating invoices.
+</Note>
+
+## Applying Taxes to Invoices
+
+### Single Tax per Line Item
+
+Most common scenario:
+
+1. Create invoice
+2. Add product line item
+3. Tax auto-populates from product default
+4. Or manually select tax from dropdown
+5. Tax amount calculated: Quantity × Unit Price × Tax Rate
+
+### Multiple Taxes per Line Item
+
+For complex scenarios (e.g., ISC + ITBIS on alcohol):
+
+<Steps>
+
+<Step title="Add Product to Invoice">
+Add the product line item
+</Step>
+
+<Step title="Select Multiple Taxes">
+In the tax field:
+1. Click to open multi-select
+2. Select first tax (e.g., "ISC Alcoholes 10%")
+3. Select second tax (e.g., "ITBIS 18%")
+4. Both taxes apply
+</Step>
+
+<Step title="Tax Calculation">
+Taxes are calculated based on type:
+
+**Exclusive taxes (most common)**:
+- Both calculated on subtotal
+- Example: $100 product
+  - ISC 10%: $10
+  - ITBIS 18%: $18
+  - Total: $100 + $10 + $18 = $128
+
+**Cascading taxes** (if configured):
+- Second tax on subtotal + first tax
+- Example: $100 product
+  - ISC 10%: $10 (on $100)
+  - ITBIS 18%: $19.80 (on $110)
+  - Total: $100 + $10 + $19.80 = $129.80
+</Step>
+
+</Steps>
+
+Reference: Tax grouping in `InvoiceController::create()`
+
+```php
+// Taxes grouped by type for UI organization
+$taxesGroupedByType = Tax::query()
+    ->orderBy('is_default', 'desc')
+    ->orderBy('name')
+    ->get()
+    ->groupBy('type')
+    ->mapWithKeys(fn ($taxes, $type) => [
+        $type => [
+            'label' => TaxType::tryFrom($type)?->label() ?? $type,
+            'isExclusive' => TaxType::tryFrom($type)?->isExclusive() ?? false,
+            'taxes' => $taxes->toArray(),
+        ],
+    ]);
+```
+
+## Tax Calculation Details
+
+### Line Item Tax Calculation
+
+```php
+// Simplified calculation logic
+$lineSubtotal = $quantity * $unitPrice;
+$lineDiscount = /* discount calculation */;
+$taxableAmount = $lineSubtotal - $lineDiscount;
+
+foreach ($selectedTaxes as $tax) {
+    $taxAmount = $taxableAmount * ($tax->rate / 100);
+    $totalTaxAmount += $taxAmount;
+}
+
+$lineTotal = $taxableAmount + $totalTaxAmount;
+```
+
+### Invoice Total Calculation
+
+```php
+// Invoice totals (from CreateInvoiceAction)
+'total_amount' => $data['total'],
+'subtotal_amount' => $data['subtotal'],      // Sum of line subtotals
+'discount_amount' => $data['discount_total'], // Sum of discounts
+'tax_amount' => $data['tax_amount'],          // Sum of all tax amounts
+```
+
+Calculation order:
+1. Calculate line subtotal (quantity × price)
+2. Apply line discount
+3. Calculate taxes on (subtotal - discount)
+4. Sum all lines for invoice totals
+
+## Viewing Tax Usage
+
+<Steps>
+
+<Step title="Navigate to Tax Detail">
+Go to **Settings** → **Taxes** → Select a tax
+
+Reference: `TaxController::show()` in `app/Http/Controllers/TaxController.php:88`
+</Step>
+
+<Step title="View Usage Statistics">
+Tax detail page shows:
+- Number of products using this as default tax
+- Number of invoice line items with this tax
+- Number of quotation line items with this tax
+- Total tax amount collected (if available)
+
+```php
+// From Tax model
+public function isInUse(): bool
+{
+    return $this->invoiceItems()->exists()
+        || $this->quotationItems()->exists()
+        || $this->products()->exists();
+}
+```
+</Step>
+
+<Step title="View Related Records">
+Links to:
+- Products using this tax
+- Recent invoices with this tax
+- Quotations with this tax
+</Step>
+
+</Steps>
+
+## Editing Tax Rates
+
+<Steps>
+
+<Step title="Navigate to Tax">
+Go to **Settings** → **Taxes** → Select tax → **Edit**
+
+Reference: `TaxController::edit()` in `app/Http/Controllers/TaxController.php:101`
+</Step>
+
+<Step title="Check If In Use">
+System displays warning if tax is currently in use:
+
+<Warning>
+Changing tax rates affects future invoices but NOT past invoices. Past invoices retain the tax rate that was applied when they were created.
+</Warning>
+
+If tax is in use:
+- **Safe to change**: Name, default status
+- **Use caution**: Rate (creates inconsistency in reporting)
+- **Not recommended**: Type (may cause calculation issues)
+</Step>
+
+<Step title="Make Changes">
+Update fields as needed:
+- Name: Safe to update
+- Rate: Update if tax rate changed by government
+- Default: Safe to toggle
+- Type: Avoid changing if in use
+</Step>
+
+<Step title="Save Changes">
+Click **Update Tax**
+
+**Impact**:
+- New invoices use new rate
+- Existing invoices unchanged (tax rate saved per line item)
+- Product defaults updated
+
+Reference: `UpdateTaxAction::handle()`
+</Step>
+
+</Steps>
+
+### Best Practice: Rate Changes
+
+When tax rates change (e.g., government changes VAT from 18% to 20%):
+
+<Steps>
+<Step title="Create New Tax">
+- Name: "ITBIS 20% (from [date])"
+- Type: ITBIS
+- Rate: 20
+- Default: ✓ Yes
+</Step>
+
+<Step title="Update Old Tax">
+- Name: "ITBIS 18% (until [date])"
+- Default: ✗ No
+</Step>
+
+<Step title="Update Products">
+Update product default taxes to use new rate
+</Step>
+</Steps>
+
+This approach maintains clear audit trail and reporting.
+
+## Deleting Taxes
+
+<Steps>
+
+<Step title="Navigate to Tax">
+Go to **Settings** → **Taxes** → Select tax → **Delete**
+
+Reference: `TaxController::destroy()` in `app/Http/Controllers/TaxController.php:125`
+</Step>
+
+<Step title="Validation Check">
+System checks if tax can be deleted:
+
+**Cannot delete if**:
+- Tax is used on any invoice line items
+- Tax is used on any quotation line items
+- Tax is set as default on any products
+
+```php
+// From DeleteTaxAction
+if ($tax->isInUse()) {
+    throw new InvalidArgumentException(
+        'No se puede eliminar el impuesto porque está siendo utilizado.'
+    );
+}
+```
+
+**Solution**: 
+- Remove tax from all products first
+- Tax remains on historical invoices (preserved for records)
+- Mark as inactive instead of deleting
+</Step>
+
+<Step title="Confirm Deletion">
+If tax is not in use, confirm deletion.
+
+Tax is permanently removed from the system.
+</Step>
+
+</Steps>
+
+## Tax Reporting
+
+### Available Tax Reports
+
+1. **Tax Collection Report**
+   - Navigate to **Reports** → **Tax Reports** → **Tax Collection**
+   - View tax collected by:
+     - Tax type
+     - Date range
+     - Customer
+     - Product category
+
+2. **Tax Liability Report**
+   - Taxes owed to tax authorities
+   - Breakdown by tax type
+   - Filing period summary
+
+3. **Withholding Tax Report**
+   - Withholding taxes collected
+   - By vendor/customer
+   - Compliance reporting format
+
+4. **Exempt Sales Report**
+   - Zero-rated and exempt sales
+   - Justification tracking
+
+### Exporting Tax Data
+
+<Steps>
+
+<Step title="Navigate to Tax Report">
+Go to desired tax report
+</Step>
+
+<Step title="Select Date Range">
+Choose reporting period (monthly, quarterly, annual)
+</Step>
+
+<Step title="Apply Filters">
+Filter by:
+- Tax type
+- Workspace
+- Customer type
+</Step>
+
+<Step title="Export">
+Click **Export** → Select format:
+- Excel (.xlsx)
+- CSV
+- PDF
+</Step>
+
+</Steps>
+
+## Common Tax Scenarios
+
+### Scenario 1: Standard Product Sale (Dominican Republic)
+
+**Product**: Electronics
+
+**Tax**: ITBIS 18%
+
+**Calculation**:
+- Subtotal: $1,000
+- ITBIS 18%: $180
+- Total: $1,180
+
+### Scenario 2: Alcohol Sale (Multiple Taxes)
+
+**Product**: Wine
+
+**Taxes**: ISC 10% + ITBIS 18%
+
+**Calculation**:
+- Subtotal: $100
+- ISC 10%: $10
+- ITBIS 18%: $18
+- Total: $128
+
+### Scenario 3: Professional Services (Withholding)
+
+**Service**: Consulting
+
+**Taxes**: Service Fee + Withholding 10%
+
+**Calculation**:
+- Service Fee: $1,000
+- Withholding 10%: $100 (retained by payer)
+- Payment to Provider: $900
+- Amount Due to Tax Authority: $100
+
+### Scenario 4: Exempt Sale
+
+**Product**: Basic food items (exempt)
+
+**Tax**: Exento (0%)
+
+**Calculation**:
+- Subtotal: $50
+- Tax: $0
+- Total: $50
+
+## Compliance and Best Practices
+
+<Tip>
+**Regular Updates**: Keep tax rates current with government regulations. Subscribe to tax authority updates.
+</Tip>
+
+<Tip>
+**Clear Naming**: Use descriptive tax names including rate and effective date for clarity.
+</Tip>
+
+<Tip>
+**Document Changes**: When tax rates change, document the change in system notes and notify users.
+</Tip>
+
+<Tip>
+**Audit Trail**: OptiFlow preserves tax rates on historical invoices. Never manually edit old tax amounts.
+</Tip>
+
+<Tip>
+**Monthly Reconciliation**: Reconcile tax collected in OptiFlow with tax reports submitted to authorities monthly.
+</Tip>
+
+<Tip>
+**Backup Before Changes**: Before changing tax configuration, export current tax reports for records.
+</Tip>
+
+## Troubleshooting
+
+### Wrong Tax Amount on Invoice
+
+**Problem**: Tax calculation appears incorrect
+
+**Investigation**:
+1. Check if discount was applied (tax is on discounted amount)
+2. Verify correct tax rate was selected
+3. Check if multiple taxes are applied
+4. Review if tax is inclusive vs. exclusive
+
+### Cannot Delete Tax
+
+**Problem**: "No se puede eliminar el impuesto porque está siendo utilizado"
+
+**Solution**:
+1. Check products using this tax → update their default tax
+2. Tax remains on historical invoices (this is correct behavior)
+3. Consider making inactive instead of deleting
+
+### Tax Not Appearing in Dropdown
+
+**Problem**: Created tax doesn't show when creating invoice
+
+**Cause**: May be filtered by type or marked inactive
+
+**Solution**:
+1. Verify tax is active
+2. Check if tax type is appropriate for the document
+3. Refresh the page
+
+### Incorrect Tax Report Totals
+
+**Problem**: Tax report totals don't match expectations
+
+**Investigation**:
+1. Verify date range is correct
+2. Check workspace filter (multi-workspace environments)
+3. Ensure invoice statuses are included (paid vs. pending)
+4. Review if cancelled invoices are excluded
+
+## Advanced Configuration
+
+### Tax Exemptions
+
+For customers exempt from certain taxes:
+
+1. Create "Exempt" tax rate (0%)
+2. When creating invoice for exempt customer, select "Exempt" tax
+3. Document exemption reason in invoice notes
+4. Maintain exemption certificates on file
+
+### Reverse Charge
+
+For B2B transactions where buyer collects tax:
+
+1. Create "Reverse Charge" tax type (0%)
+2. Apply to invoice
+3. Note in invoice: "Reverse charge applies"
+4. Buyer remits tax to authority
+
+## Related Features
+
+- [Creating Invoices](/guides/creating-invoices)
+- [Quotations to Invoices](/guides/quotations-to-invoices)
+- [Tax Reporting](/guides/tax-configuration)
+- [Tax API Reference](/api/invoices)

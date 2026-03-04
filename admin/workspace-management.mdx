@@ -1,0 +1,276 @@
+---
+title: Workspace Management
+description: Managing workspaces within your OptiFlow tenant
+---
+
+Workspaces provide an additional layer of organization within a tenant, allowing multiple business units, departments, or locations to operate independently while sharing the same tenant database.
+
+## Workspaces vs Tenants
+
+Understanding the hierarchy:
+
+- **Tenant**: Top-level isolation (separate databases, accessed via subdomain)
+- **Workspace**: Logical separation within a tenant (same database, filtered by workspace_id)
+
+```
+Tenant (acme.optiflow.com.do)
+├── Workspace: Main Office
+├── Workspace: Warehouse
+└── Workspace: Retail Store
+```
+
+<Note>
+While tenants have complete database isolation, workspaces share the same database but maintain logical separation through workspace-scoped queries.
+</Note>
+
+## Workspace Model
+
+The `App\Models\Workspace` model (`app/Models/Workspace.php:65`) defines workspace properties:
+
+```php
+// Key Properties
+$workspace->name;          // Workspace name
+$workspace->slug;          // URL-friendly identifier
+$workspace->description;   // Optional description
+$workspace->owner_id;      // User who owns this workspace
+$workspace->is_active;     // Active status
+$workspace->settings;      // JSON settings array
+```
+
+## Creating Workspaces
+
+### Using CreateWorkspaceAction
+
+Workspaces are created using the `CreateWorkspaceAction` (`app/Actions/CreateWorkspaceAction.php`):
+
+<Steps>
+  <Step title="Provide Workspace Details">
+    Required information:
+    - Name (automatically generates slug)
+    - Owner (user who will own the workspace)
+    - Optional: description, address, phone
+  </Step>
+  
+  <Step title="Workspace is Created">
+    The action creates the workspace and automatically:
+    - Generates a unique slug from the name
+    - Sets the creator as the owner
+    - Marks the workspace as active
+  </Step>
+  
+  <Step title="Add Initial Members">
+    Use `AssignUserToWorkspaceAction` to add users:
+    ```php
+    $action->handle($workspace, $user, $role);
+    ```
+  </Step>
+</Steps>
+
+### Via API/Controller
+
+The workspace creation flow is handled by workspace controllers in `app/Http/Controllers/`.
+
+## Workspace Isolation
+
+Data is isolated by workspace through several mechanisms:
+
+### Database Scoping
+
+Most models are scoped to the current workspace:
+
+```php
+// Invoices belong to a workspace
+$workspace->invoices; // Only invoices for this workspace
+
+// Prescriptions are workspace-scoped
+$workspace->prescriptions;
+
+// Document subtypes can be workspace-preferred
+$workspace->documentSubtypes;
+```
+
+### Global Scopes
+
+Many models apply automatic workspace filtering when queried in a workspace context.
+
+<Warning>
+Always verify that queries include workspace filtering to prevent data leakage between workspaces.
+</Warning>
+
+## User-Workspace Assignments
+
+### Assigning Users to Workspaces
+
+Users can belong to multiple workspaces within a tenant:
+
+```php
+// Add user to workspace with role
+$workspace->addUser($user, 'member');
+
+// Check if user has access
+$workspace->hasUser($user); // returns boolean
+
+// Remove user from workspace
+$workspace->removeUser($user);
+```
+
+### Workspace Roles
+
+Users have roles within each workspace (stored in pivot table):
+
+- **owner**: Full control over workspace
+- **admin**: Administrative access
+- **member**: Standard user access
+- Custom roles can be defined
+
+<Note>
+Workspace roles are separate from global user roles. A user can be an admin in one workspace and a member in another.
+</Note>
+
+## Workspace Switching
+
+Users can switch between their assigned workspaces:
+
+### Current Workspace
+
+Each user has a `current_workspace_id` that determines their active workspace:
+
+```php
+// Get current workspace
+$currentWorkspace = $user->currentWorkspace;
+
+// Switch workspace
+$user->switchToWorkspace($workspace);
+
+// Check access before switching
+if ($user->hasAccessToWorkspace($workspace)) {
+    $user->switchToWorkspace($workspace);
+}
+```
+
+### Using SwitchWorkspaceAction
+
+The recommended way to switch workspaces:
+
+```php
+use App\Actions\SwitchWorkspaceAction;
+
+$action = new SwitchWorkspaceAction();
+$action->handle($user, $workspace);
+```
+
+This action:
+1. Verifies user has access to the workspace
+2. Updates `current_workspace_id`
+3. Clears workspace-specific cache
+4. Updates user session
+
+## Managing Workspace Members
+
+### Adding Members
+
+<Steps>
+  <Step title="Invite User">
+    Create a user invitation (if user doesn't exist in tenant):
+    ```php
+    // UserInvitation model handles invitations
+    ```
+  </Step>
+  
+  <Step title="Assign to Workspace">
+    Use `AssignUserToWorkspaceAction`:
+    ```php
+    $action->handle($workspace, $user, $role);
+    ```
+  </Step>
+  
+  <Step title="Set Permissions">
+    Configure workspace-specific permissions using Spatie Permission package
+  </Step>
+</Steps>
+
+### Removing Members
+
+```php
+use App\Actions\RemoveWorkspaceMemberAction;
+
+$action->handle($workspace, $user);
+```
+
+<Warning>
+Workspace owners cannot be removed from their own workspace. Transfer ownership first if needed.
+</Warning>
+
+## Workspace Settings
+
+Workspaces can store custom settings in the `settings` JSON column:
+
+```php
+// Store settings
+$workspace->settings = [
+    'default_currency' => 'DOP',
+    'tax_rate' => 18,
+    'invoice_prefix' => 'INV',
+];
+$workspace->save();
+
+// Access settings
+$taxRate = $workspace->settings['tax_rate'] ?? 18;
+```
+
+## Workspace-Specific Configurations
+
+### Document Subtypes
+
+Workspaces can have preferred document subtypes (NCF sequences):
+
+```php
+// Get preferred document subtype
+$preferredSubtype = $workspace->getPreferredDocumentSubtype();
+
+// Set preferred document subtype
+use App\Actions\SetWorkspacePreferredDocumentSubtypeAction;
+$action->handle($workspace, $documentSubtype);
+```
+
+See [Document Subtypes](/admin/document-subtypes) for more details.
+
+### Company Details
+
+While company details are tenant-wide in the current implementation, they're typically used within workspace context for invoices and documents.
+
+See [Company Details Configuration](/admin/company-details) for more information.
+
+## Deleting Workspaces
+
+### Using DeleteWorkspaceAction
+
+```php
+use App\Actions\DeleteWorkspaceAction;
+
+$action = new DeleteWorkspaceAction();
+$action->handle($workspace);
+```
+
+<Warning>
+**Deleting a workspace will**:
+- Remove all user-workspace associations
+- Orphan workspace-specific data (invoices, prescriptions, etc.)
+- This operation cannot be undone
+
+Consider archiving instead of deleting by setting `is_active = false`.
+</Warning>
+
+## Best Practices
+
+1. **Naming Convention**: Use clear, descriptive workspace names (e.g., "Main Office", "Warehouse - North")
+2. **Access Control**: Regularly audit workspace member lists
+3. **Default Workspace**: Set a sensible default workspace for new users
+4. **Workspace Scoping**: Always filter queries by workspace when appropriate
+5. **Settings Management**: Document custom workspace settings in code comments
+
+## Related Resources
+
+- [Multi-Tenancy Architecture](/admin/multi-tenancy) - Understanding tenant isolation
+- [User Roles & Permissions](/admin/user-roles) - Managing access control
+- [Company Details](/admin/company-details) - Workspace-level company information

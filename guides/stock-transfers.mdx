@@ -1,0 +1,448 @@
+---
+title: Stock Transfers Between Workspaces
+description: Guide to transferring inventory between different locations in OptiFlow
+---
+
+Stock transfers allow you to move inventory between workspaces (locations) while maintaining accurate tracking and audit trails.
+
+## Overview
+
+Stock transfer features:
+- Transfer products between any workspaces you have access to
+- Real-time stock updates at both source and destination
+- Complete transfer history and audit trail
+- Automatic validation of available stock
+- Reference number tracking
+
+## Prerequisites
+
+Before transferring stock:
+
+- **Multi-Workspace Access**: You must have access to both source and destination workspaces
+- **Stock Tracking Enabled**: Product must have `track_stock = true`
+- **Available Stock**: Sufficient quantity at source workspace
+- **Permissions**: `inventory:transfer` permission
+
+## Transfer Workflow
+
+<Steps>
+
+<Step title="Navigate to Stock Transfers">
+Go to **Inventory** → **Stock Transfers** → **New Transfer**
+
+Reference: `StockTransferController::create()` in `app/Http/Controllers/StockTransferController.php:42`
+
+The system loads:
+- All products with stock tracking enabled
+- Products with available stock in your current workspace
+- All workspaces you have access to (excluding current workspace)
+
+```php
+// Only products with available stock are shown
+$products = Product::query()
+    ->where('track_stock', true)
+    ->whereHas('stocks', function ($query) use ($workspace) {
+        $query->where('workspace_id', $workspace->id)
+              ->where('quantity', '>', 0);
+    })
+    ->get();
+```
+</Step>
+
+<Step title="Select Product">
+Choose the product to transfer.
+
+The system displays:
+- Product name and SKU
+- Current stock level at source workspace
+- Product image (if available)
+
+<Note>
+You can initiate a transfer from the product detail page by clicking "Transfer Stock" which pre-fills the product selection.
+</Note>
+</Step>
+
+<Step title="Enter Transfer Details">
+Configure the transfer:
+
+**Source Workspace**: Auto-filled with your current workspace
+
+**Destination Workspace**: Select from workspaces you have access to
+- Only workspaces other than the current one are shown
+- System validates you have access to the selected workspace
+
+**Quantity**: Enter quantity to transfer
+- Must be greater than 0
+- Cannot exceed available stock at source
+- System shows available quantity for validation
+
+**Reference Number** (Optional): Custom reference for tracking
+- Auto-generated if not provided: `TRANSFERENCIA-{from}-{to}-{timestamp}`
+
+**Notes** (Optional): Transfer reason or additional information
+
+```php
+// Validation in StockTransferAction
+if ($data['quantity'] <= 0) {
+    throw new ReportableActionException(
+        'La cantidad a transferir debe ser mayor que cero.'
+    );
+}
+```
+</Step>
+
+<Step title="Review Transfer Summary">
+Before confirming, review:
+- Product being transferred
+- From workspace → To workspace
+- Quantity
+- New stock levels after transfer:
+  - Source workspace: Current - Transfer quantity
+  - Destination workspace: Current + Transfer quantity
+</Step>
+
+<Step title="Submit Transfer">
+Click **Transfer Stock** to execute.
+
+Reference: `StockTransferAction::handle()` in `app/Actions/StockTransferAction.php:24`
+
+The system performs these operations in a database transaction:
+
+```php
+DB::transaction(function () {
+    // 1. Get source stock record
+    $fromStock = ProductStock::where([
+        'product_id' => $product->id,
+        'workspace_id' => $fromWorkspace->id,
+    ])->first();
+    
+    // 2. Validate sufficient stock
+    if ($fromStock->quantity < $data['quantity']) {
+        throw new ReportableActionException("Insufficient stock");
+    }
+    
+    // 3. Deduct from source
+    $fromStock->quantity -= $data['quantity'];
+    $fromStock->save();
+    
+    // 4. Add to destination (create if not exists)
+    $toStock = ProductStock::firstOrCreate([...]);
+    $toStock->quantity += $data['quantity'];
+    $toStock->save();
+    
+    // 5. Create stock movement record
+    StockMovement::create([
+        'type' => StockMovementType::TRANSFER_OUT,
+        'from_workspace_id' => $fromWorkspace->id,
+        'to_workspace_id' => $toWorkspace->id,
+        'reference_number' => $reference,
+        // ...
+    ]);
+});
+```
+</Step>
+
+<Step title="View Transfer Confirmation">
+After successful transfer:
+- Confirmation message displays
+- Automatic redirect to transfer detail page
+- Updated stock levels shown
+- Transfer reference number provided
+</Step>
+
+</Steps>
+
+## Stock Movement Records
+
+Each transfer creates stock movement records:
+
+### Transfer Out Movement
+
+Created at the **source workspace**:
+
+```php
+StockMovement::create([
+    'workspace_id' => $fromWorkspace->id,
+    'product_id' => $product->id,
+    'type' => StockMovementType::TRANSFER_OUT,
+    'quantity' => $transferQuantity,
+    'from_workspace_id' => $fromWorkspace->id,
+    'to_workspace_id' => $toWorkspace->id,
+    'reference_number' => $reference,
+    'note' => "Transferido desde {$fromWorkspace->name} hacia {$toWorkspace->name}",
+    'user_id' => Auth::id(),
+]);
+```
+
+### Viewing Transfer Details
+
+1. Navigate to **Inventory** → **Stock Transfers**
+2. Click on a transfer to view details
+
+Transfer detail page shows:
+- Product information
+- Source and destination workspaces
+- Quantity transferred
+- Reference number
+- Date and time of transfer
+- User who performed the transfer
+- Transfer notes
+- Stock levels before and after
+
+Reference: `StockTransferController::show()` in `app/Http/Controllers/StockTransferController.php:89`
+
+## Transfer History
+
+### Viewing All Transfers
+
+Navigate to **Inventory** → **Stock Transfers** for a paginated list.
+
+Filtering options:
+- Date range
+- Product
+- Source workspace
+- Destination workspace
+- Transfer status
+- User who created transfer
+
+Reference: `StockTransfersTable::make()` provides table with filtering
+
+### Transfer Types in List
+
+The transfer list shows movements where the current workspace is either:
+- **Source** (TRANSFER_OUT): Stock you sent to other locations
+- **Destination** (TRANSFER_IN): Stock you received from other locations
+
+```php
+// Query in StockTransferController::index
+StockMovement::query()
+    ->whereIn('type', StockTransfersTable::transferTypes())
+    ->where(function ($query) use ($workspace) {
+        $query->where('from_workspace_id', $workspace->id)
+              ->orWhere('to_workspace_id', $workspace->id);
+    });
+```
+
+## Access Control and Permissions
+
+### Workspace Access Validation
+
+The system validates workspace access before allowing transfers:
+
+```php
+// From StockTransferAction::handle()
+if (! $user->workspaces()->whereIn('workspaces.id', [$fromWorkspace->id, $toWorkspace->id])->count() === 2) {
+    throw new ReportableActionException(
+        'El usuario no tiene acceso a ambas ubicaciones de trabajo para realizar la transferencia.'
+    );
+}
+```
+
+<Warning>
+You must have access to BOTH the source and destination workspaces to perform a transfer. Contact your administrator if you need access to additional workspaces.
+</Warning>
+
+### Permission Requirements
+
+- `inventory:view` - View stock transfers
+- `inventory:transfer` - Create stock transfers
+- Access to source workspace
+- Access to destination workspace
+
+## Common Transfer Scenarios
+
+### Scenario 1: Restocking a Retail Location
+
+**Situation**: Central warehouse needs to send stock to a retail store
+
+<Steps>
+<Step title="Switch to Warehouse Workspace">
+Ensure you're in the warehouse workspace context
+</Step>
+
+<Step title="Create Transfer">
+- Product: Select items to restock
+- Destination: Retail store workspace
+- Quantity: Amount needed
+</Step>
+
+<Step title="Execute Transfer">
+Stock immediately updates at both locations
+</Step>
+</Steps>
+
+### Scenario 2: Balancing Stock Between Stores
+
+**Situation**: Store A has excess inventory, Store B is low
+
+<Steps>
+<Step title="Navigate from Store A">
+Switch to Store A workspace
+</Step>
+
+<Step title="Transfer to Store B">
+- Select overstocked product
+- Destination: Store B
+- Quantity: Excess amount
+</Step>
+</Steps>
+
+### Scenario 3: Returns to Warehouse
+
+**Situation**: Returning damaged or unsold items to central warehouse
+
+<Steps>
+<Step title="From Store Workspace">
+Initiate transfer from store
+</Step>
+
+<Step title="Transfer to Warehouse">
+- Product: Items being returned
+- Destination: Warehouse
+- Notes: Add reason ("Damaged", "Seasonal return", etc.)
+</Step>
+</Steps>
+
+## Validation and Error Handling
+
+### Insufficient Stock Error
+
+**Error Message**: "No hay suficiente stock en la ubicación de trabajo de origen"
+
+**Cause**: Trying to transfer more than available at source
+
+**Solution**:
+1. Check current stock level at source workspace
+2. Adjust transfer quantity
+3. Or perform stock adjustment if system quantity is incorrect
+
+### Same Workspace Error
+
+**Error Message**: "No se puede transferir stock a la misma ubicación de trabajo"
+
+**Cause**: Source and destination workspaces are the same
+
+**Solution**: Select a different destination workspace
+
+### No Access to Workspace Error
+
+**Error Message**: "El usuario no tiene acceso a ambas ubicaciones"
+
+**Cause**: Missing access to source or destination workspace
+
+**Solution**: 
+1. Contact administrator to grant workspace access
+2. Or have someone with access to both workspaces perform the transfer
+
+### Product Not Trackable Error
+
+**Error Message**: "No se puede transferir stock de un producto que no tiene el seguimiento de inventario habilitado"
+
+**Cause**: Product has `track_stock = false`
+
+**Solution**:
+1. Edit the product
+2. Enable "Track Stock"
+3. Set initial stock levels
+4. Then perform transfer
+
+## Transfer Reporting
+
+### Transfer Activity Report
+
+View transfer patterns and activity:
+
+1. Navigate to **Reports** → **Inventory Reports** → **Transfer Activity**
+2. Select date range
+3. View:
+   - Most transferred products
+   - Transfers by workspace pair
+   - Transfer frequency
+   - Average transfer quantities
+
+### Audit Trail
+
+All transfers include complete audit information:
+- Who performed the transfer (`user_id`)
+- When it occurred (`created_at`)
+- Reference number for tracking
+- Notes explaining the transfer reason
+
+Reference: `StockMovement` model with `createdBy` relationship
+
+```php
+public function createdBy(): BelongsTo
+{
+    return $this->belongsTo(User::class, 'user_id');
+}
+```
+
+## Best Practices
+
+<Tip>
+**Use Reference Numbers**: Always add meaningful reference numbers (PO numbers, transfer request IDs) for easier tracking.
+</Tip>
+
+<Tip>
+**Add Notes**: Document the reason for transfers ("Seasonal restock", "Balancing inventory", "Customer request") for better reporting.
+</Tip>
+
+<Tip>
+**Verify Before Transfer**: Double-check source stock levels before initiating large transfers to avoid errors.
+</Tip>
+
+<Tip>
+**Regular Reconciliation**: Periodically review transfer history to ensure all transfers were completed correctly.
+</Tip>
+
+<Tip>
+**Batch Similar Transfers**: If transferring multiple products between the same workspaces, consider using bulk transfer features (if available) for efficiency.
+</Tip>
+
+## Integration with Other Features
+
+### Transfer After Sales Analysis
+
+Transfers can be triggered by:
+- Sales reports showing low stock at one location
+- High demand analysis at specific workspaces
+- Seasonal inventory rebalancing
+
+### Transfer Before Stock Takes
+
+Best practice before physical inventory counts:
+1. Complete all pending transfers
+2. Ensure all transfers are recorded in the system
+3. Then perform stock count
+
+This ensures accurate count reconciliation.
+
+## Troubleshooting
+
+### Transfer Appears in One Workspace Only
+
+**Problem**: Transfer shows at source but not destination
+
+**Investigation**:
+1. Check stock movement records for both `TRANSFER_OUT` and `TRANSFER_IN`
+2. Verify reference numbers match
+3. Check ProductStock records at both workspaces
+
+**Solution**: If data is incomplete, contact support or create manual stock adjustment.
+
+### Cannot Find Transfer in History
+
+**Problem**: Transfer was completed but doesn't appear in list
+
+**Solution**:
+1. Ensure you're filtering correctly (check date range)
+2. Switch workspace context to source or destination
+3. Search by reference number
+4. Check user filters (if transfer was by another user)
+
+## Related Features
+
+- [Managing Inventory](/guides/managing-inventory)
+- [Stock Adjustments](/guides/managing-inventory#stock-adjustments)
+- [Multi-Workspace Setup](/admin/workspace-management)
+- [Transfer API Reference](/api/inventory)

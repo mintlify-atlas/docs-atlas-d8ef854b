@@ -1,0 +1,523 @@
+---
+title: 'Quotation Endpoints'
+description: 'Create, retrieve, update, and convert quotations via the API'
+icon: 'file-alt'
+---
+
+## Overview
+
+The Quotations API allows you to manage sales quotations (also known as estimates or proformas). Quotations can be converted to invoices once approved by the customer.
+
+## Quotation Object
+
+The quotation object structure is similar to invoices:
+
+<ResponseField name="id" type="integer">
+  Unique identifier for the quotation
+</ResponseField>
+
+<ResponseField name="workspace_id" type="integer">
+  ID of the workspace this quotation belongs to
+</ResponseField>
+
+<ResponseField name="contact_id" type="integer">
+  ID of the customer contact
+</ResponseField>
+
+<ResponseField name="document_subtype_id" type="integer">
+  ID of the document subtype
+</ResponseField>
+
+<ResponseField name="document_number" type="string">
+  Quotation number (e.g., "QT-0001")
+</ResponseField>
+
+<ResponseField name="issue_date" type="date">
+  Date the quotation was issued
+</ResponseField>
+
+<ResponseField name="due_date" type="date">
+  Expiration date for this quotation
+</ResponseField>
+
+<ResponseField name="status" type="enum">
+  Quotation status: `draft`, `sent`, `approved`, `rejected`, `converted`, `cancelled`
+</ResponseField>
+
+<ResponseField name="subtotal_amount" type="decimal">
+  Subtotal before taxes and discounts
+</ResponseField>
+
+<ResponseField name="tax_amount" type="decimal">
+  Total tax amount
+</ResponseField>
+
+<ResponseField name="discount_amount" type="decimal">
+  Total discount amount
+</ResponseField>
+
+<ResponseField name="total_amount" type="decimal">
+  Final total amount
+</ResponseField>
+
+<ResponseField name="notes" type="string">
+  Additional notes or terms
+</ResponseField>
+
+<ResponseField name="items" type="array">
+  Array of quotation line items
+</ResponseField>
+
+---
+
+## List Quotations
+
+<api>GET /quotations</api>
+
+Retrieve a paginated list of quotations.
+
+### Query Parameters
+
+<ParamField query="page" type="integer" default="1">
+  Page number for pagination
+</ParamField>
+
+<ParamField query="per_page" type="integer" default="15">
+  Number of items per page
+</ParamField>
+
+<ParamField query="filter[status]" type="string">
+  Filter by status: `draft`, `sent`, `approved`, `converted`, `cancelled`
+</ParamField>
+
+<ParamField query="filter[contact_id]" type="integer">
+  Filter by customer contact ID
+</ParamField>
+
+<ParamField query="sort" type="string" default="-issue_date">
+  Sort field (prefix with `-` for descending)
+</ParamField>
+
+### Response
+
+<CodeGroup>
+
+```json 200 OK
+{
+  "data": [
+    {
+      "id": 5,
+      "workspace_id": 2,
+      "contact_id": 45,
+      "document_subtype_id": 8,
+      "document_number": "QT-0005",
+      "issue_date": "2024-03-15",
+      "due_date": "2024-03-30",
+      "status": "sent",
+      "subtotal_amount": "2500.00",
+      "tax_amount": "450.00",
+      "discount_amount": "0.00",
+      "total_amount": "2950.00",
+      "notes": "Valid for 15 days",
+      "created_at": "2024-03-15T09:00:00Z",
+      "updated_at": "2024-03-15T09:00:00Z"
+    }
+  ],
+  "meta": {
+    "current_page": 1,
+    "last_page": 2,
+    "per_page": 15,
+    "total": 18
+  }
+}
+```
+
+</CodeGroup>
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -X GET "https://acme.yourdomain.com/api/v1/quotations?filter[status]=sent" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Accept: application/json"
+```
+
+```php PHP
+$quotations = Http::withToken($token)
+    ->get('https://acme.yourdomain.com/api/v1/quotations', [
+        'filter' => ['status' => 'sent']
+    ])
+    ->json('data');
+```
+
+```javascript JavaScript
+const { data: quotations } = await fetch(
+  'https://acme.yourdomain.com/api/v1/quotations?filter[status]=sent',
+  {
+    headers: {
+      'Authorization': 'Bearer YOUR_TOKEN',
+      'Accept': 'application/json'
+    }
+  }
+).then(r => r.json());
+```
+
+</CodeGroup>
+
+---
+
+## Get Quotation
+
+<api>GET /quotations/{id}</api>
+
+Retrieve a specific quotation by ID.
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  Quotation ID
+</ParamField>
+
+### Response
+
+<CodeGroup>
+
+```json 200 OK
+{
+  "data": {
+    "id": 5,
+    "workspace_id": 2,
+    "contact_id": 45,
+    "document_number": "QT-0005",
+    "issue_date": "2024-03-15",
+    "due_date": "2024-03-30",
+    "status": "sent",
+    "total_amount": "2950.00",
+    "contact": {
+      "id": 45,
+      "name": "Acme Corporation",
+      "email": "contact@acme.com"
+    },
+    "items": [
+      {
+        "id": 12,
+        "product_id": 78,
+        "description": "Premium Product",
+        "quantity": "20.00",
+        "unit_price": "125.00",
+        "discount": "0.00",
+        "subtotal": "2500.00",
+        "tax_amount": "450.00",
+        "total": "2950.00",
+        "product": {
+          "id": 78,
+          "name": "Premium Product",
+          "sku": "PROD-001"
+        },
+        "taxes": [
+          {
+            "id": 1,
+            "name": "ITBIS",
+            "rate": "18.00"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+</CodeGroup>
+
+---
+
+## Create Quotation
+
+<api>POST /quotations</api>
+
+Create a new quotation.
+
+### Request Body
+
+<ParamField body="contact_id" type="integer" required>
+  Customer contact ID
+</ParamField>
+
+<ParamField body="document_subtype_id" type="integer" required>
+  Document subtype ID
+</ParamField>
+
+<ParamField body="issue_date" type="date" required>
+  Quotation issue date (YYYY-MM-DD)
+</ParamField>
+
+<ParamField body="due_date" type="date">
+  Expiration date (YYYY-MM-DD)
+</ParamField>
+
+<ParamField body="notes" type="string">
+  Additional notes or terms
+</ParamField>
+
+<ParamField body="items" type="array" required>
+  Array of quotation line items (same structure as invoice items)
+</ParamField>
+
+<ParamField body="items[].product_id" type="integer" required>
+  Product ID
+</ParamField>
+
+<ParamField body="items[].quantity" type="decimal" required>
+  Quantity
+</ParamField>
+
+<ParamField body="items[].unit_price" type="decimal" required>
+  Unit price
+</ParamField>
+
+<ParamField body="items[].discount" type="decimal" default="0">
+  Discount amount
+</ParamField>
+
+<ParamField body="items[].tax_ids" type="array">
+  Array of tax IDs
+</ParamField>
+
+### Response
+
+<CodeGroup>
+
+```json 201 Created
+{
+  "data": {
+    "id": 18,
+    "workspace_id": 2,
+    "contact_id": 45,
+    "document_number": "QT-0018",
+    "issue_date": "2024-03-20",
+    "status": "draft",
+    "total_amount": "2950.00",
+    "created_at": "2024-03-20T10:30:00Z"
+  },
+  "message": "Cotización creada exitosamente."
+}
+```
+
+</CodeGroup>
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://acme.yourdomain.com/api/v1/quotations \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "contact_id": 45,
+    "document_subtype_id": 8,
+    "issue_date": "2024-03-20",
+    "due_date": "2024-04-04",
+    "notes": "Valid for 15 days",
+    "items": [
+      {
+        "product_id": 78,
+        "quantity": 20,
+        "unit_price": 125.00,
+        "tax_ids": [1]
+      }
+    ]
+  }'
+```
+
+```php PHP
+$quotation = Http::withToken($token)
+    ->post('https://acme.yourdomain.com/api/v1/quotations', [
+        'contact_id' => 45,
+        'document_subtype_id' => 8,
+        'issue_date' => '2024-03-20',
+        'due_date' => '2024-04-04',
+        'notes' => 'Valid for 15 days',
+        'items' => [
+            [
+                'product_id' => 78,
+                'quantity' => 20,
+                'unit_price' => 125.00,
+                'tax_ids' => [1],
+            ],
+        ],
+    ])
+    ->json('data');
+```
+
+</CodeGroup>
+
+<Note>
+  Quotations are created with status `draft` by default. They do not affect inventory until converted to invoices.
+</Note>
+
+---
+
+## Update Quotation
+
+<api>PATCH /quotations/{id}</api>
+
+Update an existing quotation.
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  Quotation ID
+</ParamField>
+
+### Request Body
+
+Same as Create Quotation. All fields are optional.
+
+### Response
+
+```json
+{
+  "data": {
+    "id": 18,
+    "total_amount": "3200.00",
+    "updated_at": "2024-03-20T11:00:00Z"
+  },
+  "message": "Cotización actualizada exitosamente."
+}
+```
+
+---
+
+## Delete Quotation
+
+<api>DELETE /quotations/{id}</api>
+
+Delete a quotation.
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  Quotation ID
+</ParamField>
+
+### Response
+
+```json
+{
+  "message": "Cotización eliminada exitosamente."
+}
+```
+
+---
+
+## Convert to Invoice
+
+<api>POST /quotations/{id}/convert-to-invoice</api>
+
+Convert an approved quotation to an invoice. This creates a new invoice with the same items and marks the quotation as `converted`.
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  Quotation ID
+</ParamField>
+
+### Response
+
+<CodeGroup>
+
+```json 302 Redirect
+{
+  "message": "Redirecting to invoice creation...",
+  "redirect_url": "/invoices/create-from-quotation/5"
+}
+```
+
+```json 403 Forbidden
+{
+  "message": "La cotización ya ha sido convertida a factura."
+}
+```
+
+</CodeGroup>
+
+### Example
+
+```bash
+curl -X POST https://acme.yourdomain.com/api/v1/quotations/5/convert-to-invoice \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Accept: application/json"
+```
+
+<Warning>
+  Quotations can only be converted once. Attempting to convert a quotation with status `converted` or `cancelled` will result in an error.
+</Warning>
+
+---
+
+## Download Quotation PDF
+
+<api>GET /quotations/{id}/pdf</api>
+
+Download quotation as PDF document.
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  Quotation ID
+</ParamField>
+
+### Response
+
+Returns a PDF file with `Content-Type: application/pdf`.
+
+### Example
+
+```bash
+curl -X GET https://acme.yourdomain.com/api/v1/quotations/5/pdf \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -o quotation-005.pdf
+```
+
+---
+
+## Bulk PDF Download
+
+<api>POST /quotations/bulk/pdf</api>
+
+Download multiple quotations as a single ZIP file containing PDFs.
+
+### Request Body
+
+<ParamField body="quotation_ids" type="array" required>
+  Array of quotation IDs to download
+</ParamField>
+
+### Example
+
+```bash
+curl -X POST https://acme.yourdomain.com/api/v1/quotations/bulk/pdf \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"quotation_ids": [1, 2, 3, 4, 5]}' \
+  -o quotations.zip
+```
+
+---
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Invoices" icon="file-invoice" href="/api/invoices">
+    Convert quotations to invoices
+  </Card>
+  <Card title="Contacts" icon="users" href="/api/contacts">
+    Manage customer information
+  </Card>
+  <Card title="Products" icon="box" href="/api/products">
+    Product catalog for quotations
+  </Card>
+</CardGroup>

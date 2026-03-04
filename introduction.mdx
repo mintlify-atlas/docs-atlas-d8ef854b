@@ -1,0 +1,193 @@
+---
+title: "Introduction"
+description: "Welcome to OptiFlow - Modern operations management for optical stores and similar businesses"
+---
+
+## What is OptiFlow?
+
+OptiFlow is a comprehensive web application designed specifically for operations management in optical stores, optometry clinics, and similar businesses. Built with modern technologies, it provides a complete solution for managing your day-to-day operations, from inventory and invoicing to customer relationships and workflow automation.
+
+<CardGroup cols={2}>
+  <Card title="Multi-Location Support" icon="building">
+    Manage multiple store locations with complete data isolation and workspace-based access control
+  </Card>
+  <Card title="Complete Invoicing" icon="file-invoice">
+    Professional invoice generation with tax calculations, PDF export, and payment tracking
+  </Card>
+  <Card title="Inventory Management" icon="warehouse">
+    Real-time stock tracking with transfers, movements, and automated updates from sales
+  </Card>
+  <Card title="Workflow Automation" icon="bolt">
+    Visual workflow builder to automate repetitive tasks and streamline operations
+  </Card>
+</CardGroup>
+
+## Who is OptiFlow For?
+
+OptiFlow is designed for:
+
+- **Optical Store Owners** - Managing single or multiple retail locations
+- **Optometry Clinics** - Tracking prescriptions, patients, and inventory
+- **Eyewear Retailers** - Complete product catalog and sales management
+- **Healthcare Administrators** - Multi-location healthcare operations
+
+## Key Features
+
+OptiFlow offers a comprehensive suite of features to manage every aspect of your optical business:
+
+### Business Operations
+
+<AccordionGroup>
+  <Accordion title="Product Catalog Management">
+    Complete product management with SKU tracking, pricing tiers, cost tracking, and profit margin calculations. Support for both physical products and services with customizable attributes.
+  </Accordion>
+
+  <Accordion title="Inventory & Stock Control">
+    Real-time inventory tracking across all locations with automatic stock deductions, inter-workspace transfers, low stock alerts, and comprehensive movement history.
+  </Accordion>
+
+  <Accordion title="Invoicing & Quotations">
+    Professional invoice and quotation generation with tax calculations, multiple payment methods, PDF export, and seamless quotation-to-invoice conversion.
+  </Accordion>
+
+  <Accordion title="Contact Management">
+    Comprehensive customer and supplier directory with relationship tracking, contact history, financial summaries, and bulk import capabilities.
+  </Accordion>
+</AccordionGroup>
+
+### Multi-Tenancy & Workspaces
+
+- **Complete Tenant Isolation** - Each business operates in its own isolated environment with separate databases
+- **Multi-Workspace Management** - Create separate workspaces for different store locations or departments
+- **Role-Based Access Control** - Fine-grained permissions for users across workspaces
+- **Subdomain-Based Access** - Each tenant gets its own subdomain (e.g., `yourstore.optiflow.test`)
+
+### Advanced Features
+
+- **Workflow Automation** - Visual workflow builder with triggers, actions, and integrations
+- **Prescription Management** - Track optical prescriptions with complete clinical data
+- **Multi-Currency Support** - Handle transactions in multiple currencies with exchange rate tracking
+- **Tax Configuration** - Flexible tax rates supporting multiple tax types (ITBIS, ISC, withholding)
+- **NCF Compliance** - Support for Dominican Republic's Números de Comprobante Fiscal
+- **Third-Party Integrations** - Telegram, WhatsApp, and email notifications
+
+## Technology Stack
+
+OptiFlow is built on a modern, robust technology stack:
+
+### Backend
+
+- **Laravel 12** - The latest version of PHP's leading web framework
+- **PHP 8.3+** - Modern PHP with type safety and performance improvements
+- **SQLite/MySQL** - Flexible database options for development and production
+- **Laravel Tenancy** - Complete multi-tenancy with database isolation
+- **Filament Admin** - Beautiful admin panel for system management
+
+### Frontend
+
+- **React 19** - Latest React with improved performance and developer experience
+- **Inertia.js v2** - Modern monolithic architecture without the complexity
+- **TypeScript** - Type-safe JavaScript for better code quality
+- **Tailwind CSS 4** - Utility-first CSS framework with CSS-first configuration
+- **Radix UI** - Accessible component primitives
+
+### Developer Tools
+
+- **Laravel Pint** - Opinionated PHP code formatter
+- **PHPStan** - Static analysis for type safety
+- **Rector** - Automated code refactoring
+- **Pest v4** - Elegant testing framework with browser testing support
+- **Vite** - Modern frontend build tool
+
+## Architecture Overview
+
+OptiFlow uses a sophisticated architecture to provide complete data isolation and multi-location support:
+
+```
+┌─────────────────────────────────────────┐
+│         Central Application             │
+│  (Tenant Management & Admin Panel)      │
+│         https://optiflow.test           │
+└─────────────────────────────────────────┘
+                  │
+        ┌─────────┴─────────┐
+        │                   │
+┌───────▼───────┐   ┌───────▼───────┐
+│  Tenant A     │   │  Tenant B     │
+│  Database     │   │  Database     │
+│               │   │               │
+│ ┌───────────┐ │   │ ┌───────────┐ │
+│ │Workspace 1│ │   │ │Workspace 1│ │
+│ │Workspace 2│ │   │ │Workspace 2│ │
+│ └───────────┘ │   │ └───────────┘ │
+└───────────────┘   └───────────────┘
+  tenant-a.test      tenant-b.test
+```
+
+### Multi-Tenancy
+
+- Each business (tenant) gets complete database isolation
+- Tenants access via unique subdomains
+- Central admin panel for tenant management
+- Automatic context switching based on subdomain
+
+### Workspace Isolation
+
+- Within each tenant, create multiple workspaces (stores, locations, departments)
+- All business data is workspace-scoped
+- Users can belong to multiple workspaces with different roles
+- Seamless workspace switching in the UI
+
+## Getting Started
+
+Ready to dive in? Here's how to get started with OptiFlow:
+
+<Steps>
+  <Step title="Installation">
+    Follow our [installation guide](/installation) to set up OptiFlow in your environment.
+  </Step>
+  
+  <Step title="Quick Start">
+    Check out the [quickstart guide](/quickstart) to create your first tenant and workspace.
+  </Step>
+  
+  <Step title="Explore Features">
+    Learn about OptiFlow's [core features](/features/multi-workspace) and capabilities.
+  </Step>
+  
+  <Step title="API Integration">
+    Integrate with our [REST API](/api/overview) for custom solutions.
+  </Step>
+</Steps>
+
+## Support & Community
+
+<CardGroup cols={2}>
+  <Card title="GitHub Repository" icon="github" href="https://github.com/luisscruza/optiflow">
+    View the source code, report issues, and contribute to the project
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/overview">
+    Complete API documentation for building integrations
+  </Card>
+</CardGroup>
+
+<Note>
+  OptiFlow is currently in active development. Some features may be incomplete or subject to change. Check the [GitHub repository](https://github.com/luisscruza/optiflow) for the latest updates.
+</Note>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Installation Guide" icon="download" href="/installation">
+    Set up OptiFlow in your local environment or server
+  </Card>
+  <Card title="Quickstart Tutorial" icon="rocket" href="/quickstart">
+    Get your first tenant and workspace running in minutes
+  </Card>
+  <Card title="Core Features" icon="sparkles" href="/features/multi-workspace">
+    Explore what OptiFlow can do for your business
+  </Card>
+  <Card title="User Guides" icon="book" href="/guides/creating-invoices">
+    Learn how to use OptiFlow's features effectively
+  </Card>
+</CardGroup>

@@ -1,0 +1,585 @@
+---
+title: 'Workspace Endpoints'
+description: 'Manage workspaces (locations/branches) via the API'
+icon: 'building'
+---
+
+## Overview
+
+Workspaces represent physical locations, branches, or departments within your organization. Each workspace can have its own:
+
+- Inventory levels
+- Users and permissions
+- Sales and operational data
+- Preferred document settings
+
+Resources like invoices, products, and contacts can be scoped to specific workspaces, enabling multi-location inventory management and reporting.
+
+## Workspace Object
+
+<ResponseField name="id" type="integer">
+  Unique identifier for the workspace
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  Workspace name (e.g., "Main Store", "Warehouse", "Branch 2")
+</ResponseField>
+
+<ResponseField name="owner_id" type="integer">
+  User ID of the workspace owner
+</ResponseField>
+
+<ResponseField name="created_at" type="timestamp">
+  Creation timestamp
+</ResponseField>
+
+<ResponseField name="updated_at" type="timestamp">
+  Last update timestamp
+</ResponseField>
+
+<ResponseField name="members" type="array">
+  Array of users who have access to this workspace
+</ResponseField>
+
+<ResponseField name="owner" type="object">
+  Workspace owner details
+</ResponseField>
+
+---
+
+## List Workspaces
+
+<api>GET /workspaces</api>
+
+Retrieve all workspaces the authenticated user has access to.
+
+### Response
+
+<CodeGroup>
+
+```json 200 OK
+{
+  "data": [
+    {
+      "id": 1,
+      "name": "Main Store",
+      "owner_id": 1,
+      "owner": {
+        "id": 1,
+        "name": "Admin User",
+        "email": "admin@example.com"
+      },
+      "is_owner": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    },
+    {
+      "id": 2,
+      "name": "Warehouse",
+      "owner_id": 1,
+      "owner": {
+        "id": 1,
+        "name": "Admin User",
+        "email": "admin@example.com"
+      },
+      "is_owner": false,
+      "created_at": "2024-02-01T00:00:00Z",
+      "updated_at": "2024-02-01T00:00:00Z"
+    }
+  ]
+}
+```
+
+</CodeGroup>
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -X GET https://acme.yourdomain.com/api/v1/workspaces \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Accept: application/json"
+```
+
+```php PHP
+$workspaces = Http::withToken($token)
+    ->get('https://acme.yourdomain.com/api/v1/workspaces')
+    ->json('data');
+```
+
+```javascript JavaScript
+const { data: workspaces } = await fetch(
+  'https://acme.yourdomain.com/api/v1/workspaces',
+  {
+    headers: {
+      'Authorization': 'Bearer YOUR_TOKEN',
+      'Accept': 'application/json'
+    }
+  }
+).then(r => r.json());
+```
+
+</CodeGroup>
+
+<Note>
+  Users only see workspaces they have access to. Users with the `view_all_locations` permission can see all workspaces in the tenant.
+</Note>
+
+---
+
+## Create Workspace
+
+<api>POST /workspaces</api>
+
+Create a new workspace.
+
+### Request Body
+
+<ParamField body="name" type="string" required>
+  Workspace name (must be unique within the tenant)
+</ParamField>
+
+### Response
+
+<CodeGroup>
+
+```json 201 Created
+{
+  "data": {
+    "id": 5,
+    "name": "New Branch",
+    "owner_id": 1,
+    "created_at": "2024-03-20T14:00:00Z"
+  },
+  "message": "¡Sucursal creada correctamente!"
+}
+```
+
+```json 422 Validation Error
+{
+  "message": "The given data was invalid.",
+  "errors": {
+    "name": [
+      "The name has already been taken."
+    ]
+  }
+}
+```
+
+</CodeGroup>
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://acme.yourdomain.com/api/v1/workspaces \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "New Branch"}'
+```
+
+```php PHP
+$workspace = Http::withToken($token)
+    ->post('https://acme.yourdomain.com/api/v1/workspaces', [
+        'name' => 'New Branch',
+    ])
+    ->json('data');
+```
+
+```javascript JavaScript
+const { data: workspace } = await fetch(
+  'https://acme.yourdomain.com/api/v1/workspaces',
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer YOUR_TOKEN',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ name: 'New Branch' })
+  }
+).then(r => r.json());
+```
+
+</CodeGroup>
+
+<Note>
+  When you create a workspace, you automatically become its owner and are added as a member. The workspace becomes your current active workspace.
+</Note>
+
+---
+
+## Update Workspace
+
+<api>PATCH /workspaces/{id}</api>
+
+Update workspace details.
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  Workspace ID
+</ParamField>
+
+### Request Body
+
+<ParamField body="name" type="string">
+  New workspace name
+</ParamField>
+
+### Response
+
+```json
+{
+  "data": {
+    "id": 5,
+    "name": "Updated Branch Name",
+    "updated_at": "2024-03-20T15:00:00Z"
+  },
+  "message": "¡Sucursal actualizada correctamente!"
+}
+```
+
+<Warning>
+  Only workspace owners can update workspace settings.
+</Warning>
+
+---
+
+## Switch Workspace Context
+
+<api>PATCH /workspace-context/{id}</api>
+
+Switch your current active workspace. This affects which workspace is used by default for subsequent operations.
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  Workspace ID to switch to
+</ParamField>
+
+### Response
+
+```json
+{
+  "data": {
+    "current_workspace_id": 3,
+    "workspace": {
+      "id": 3,
+      "name": "Warehouse"
+    }
+  },
+  "message": "Workspace context updated."
+}
+```
+
+### Example
+
+```bash
+curl -X PATCH https://acme.yourdomain.com/api/v1/workspace-context/3 \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Accept: application/json"
+```
+
+<Note>
+  Switching workspace context updates your user's `current_workspace_id`. All subsequent requests will use this workspace by default unless you specify a different one with the `X-Workspace-ID` header.
+</Note>
+
+---
+
+## Clear Workspace Context
+
+<api>DELETE /workspace-context/{id}</api>
+
+Clear the current workspace context (useful for operations that don't require a specific workspace).
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  Workspace ID
+</ParamField>
+
+### Response
+
+```json
+{
+  "message": "Workspace context cleared."
+}
+```
+
+---
+
+## Workspace Members
+
+### List Members
+
+<api>GET /workspace/members</api>
+
+Retrieve all members of the current workspace.
+
+### Response
+
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "name": "John Doe",
+      "email": "john@example.com",
+      "role": "admin",
+      "added_at": "2024-01-01T00:00:00Z"
+    },
+    {
+      "id": 2,
+      "name": "Jane Smith",
+      "email": "jane@example.com",
+      "role": "member",
+      "added_at": "2024-02-15T10:00:00Z"
+    }
+  ]
+}
+```
+
+---
+
+### Update Member Role
+
+<api>PATCH /workspace/members/{member_id}/role</api>
+
+Update a workspace member's role.
+
+#### Request Body
+
+<ParamField body="role" type="string" required>
+  Role name: `admin`, `member`, `viewer`, or custom role
+</ParamField>
+
+#### Response
+
+```json
+{
+  "message": "Member role updated successfully."
+}
+```
+
+---
+
+### Remove Member
+
+<api>DELETE /workspace/members/{member_id}</api>
+
+Remove a user from the workspace.
+
+<Warning>
+  You cannot remove the workspace owner. Transfer ownership first if needed.
+</Warning>
+
+#### Response
+
+```json
+{
+  "message": "Member removed from workspace."
+}
+```
+
+---
+
+## Workspace Invitations
+
+### Send Invitation
+
+<api>POST /workspace/invitations</api>
+
+Invite a user to join the workspace.
+
+#### Request Body
+
+<ParamField body="email" type="string" required>
+  Email address of the user to invite
+</ParamField>
+
+<ParamField body="role" type="string" default="member">
+  Role to assign to the invited user
+</ParamField>
+
+#### Response
+
+```json
+{
+  "data": {
+    "id": 45,
+    "email": "newuser@example.com",
+    "role": "member",
+    "token": "abc123def456",
+    "expires_at": "2024-03-27T14:00:00Z"
+  },
+  "message": "Invitation sent successfully."
+}
+```
+
+<Note>
+  The invited user will receive an email with a link to accept the invitation. The invitation expires after 7 days.
+</Note>
+
+---
+
+## Workspace Roles
+
+### List Roles
+
+<api>GET /workspace/roles</api>
+
+Retrieve all roles available in the workspace.
+
+### Response
+
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "name": "admin",
+      "display_name": "Administrator",
+      "permissions": [
+        "invoices:view",
+        "invoices:create",
+        "invoices:edit",
+        "invoices:delete",
+        "products:view",
+        "products:create"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "member",
+      "display_name": "Member",
+      "permissions": [
+        "invoices:view",
+        "invoices:create",
+        "products:view"
+      ]
+    }
+  ]
+}
+```
+
+---
+
+### Create Custom Role
+
+<api>POST /workspace/roles</api>
+
+Create a custom role for the workspace.
+
+#### Request Body
+
+<ParamField body="name" type="string" required>
+  Role name (unique, alphanumeric with underscores)
+</ParamField>
+
+<ParamField body="display_name" type="string" required>
+  Human-readable role name
+</ParamField>
+
+<ParamField body="permissions" type="array" required>
+  Array of permission identifiers
+</ParamField>
+
+#### Response
+
+```json
+{
+  "data": {
+    "id": 15,
+    "name": "sales_rep",
+    "display_name": "Sales Representative",
+    "permissions": [
+      "invoices:view",
+      "invoices:create",
+      "quotations:view",
+      "quotations:create",
+      "contacts:view"
+    ]
+  },
+  "message": "Role created successfully."
+}
+```
+
+---
+
+### Update Role
+
+<api>PATCH /workspace/roles/{role_id}</api>
+
+Update a custom role's permissions.
+
+<Warning>
+  Built-in roles (`admin`, `member`) cannot be modified. You can only update custom roles.
+</Warning>
+
+---
+
+### Delete Role
+
+<api>DELETE /workspace/roles/{role_id}</api>
+
+Delete a custom role. Users assigned to this role will need to be reassigned.
+
+---
+
+## Workspace Settings
+
+### Set Preferred Document Subtype
+
+<api>PATCH /document-subtypes/{id}/workspace/{workspace_id}/set-preferred</api>
+
+Set the preferred document subtype (NCF sequence) for a workspace.
+
+#### Response
+
+```json
+{
+  "message": "Preferred document subtype updated."
+}
+```
+
+---
+
+## Multi-Workspace Operations
+
+When working with multiple workspaces:
+
+1. **Default Context**: Operations use your `current_workspace_id` by default
+2. **Override Context**: Use the `X-Workspace-ID` header to specify a different workspace
+3. **Permission Check**: You must have access to the specified workspace
+
+### Example: Create Invoice in Specific Workspace
+
+```bash
+curl -X POST https://acme.yourdomain.com/api/v1/invoices \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "X-Workspace-ID: 3" \
+  -H "Content-Type: application/json" \
+  -d '{...}'
+```
+
+<Note>
+  Stock levels, invoices, and contacts are automatically scoped to the workspace context. You cannot access another workspace's resources without proper permissions.
+</Note>
+
+---
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Inventory" icon="warehouse" href="/api/inventory">
+    Workspace-specific stock levels
+  </Card>
+  <Card title="Users" icon="users" href="#">
+    Manage workspace members and roles
+  </Card>
+  <Card title="Permissions" icon="shield" href="#">
+    Configure role-based access control
+  </Card>
+</CardGroup>

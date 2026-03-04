@@ -1,0 +1,595 @@
+---
+title: 'Contact Endpoints'
+description: 'Manage customers, suppliers, and other contacts via the API'
+icon: 'users'
+---
+
+## Overview
+
+The Contacts API allows you to manage customers, suppliers, optometrists, and other contacts in your system. Contacts are used in invoices, quotations, purchases, and prescriptions.
+
+## Contact Object
+
+<ResponseField name="id" type="integer">
+  Unique identifier for the contact
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  Contact name or company name
+</ResponseField>
+
+<ResponseField name="email" type="string">
+  Primary email address
+</ResponseField>
+
+<ResponseField name="phone" type="string">
+  Primary phone number
+</ResponseField>
+
+<ResponseField name="phone_primary" type="string">
+  Primary phone
+</ResponseField>
+
+<ResponseField name="phone_secondary" type="string">
+  Secondary phone
+</ResponseField>
+
+<ResponseField name="mobile" type="string">
+  Mobile phone
+</ResponseField>
+
+<ResponseField name="fax" type="string">
+  Fax number
+</ResponseField>
+
+<ResponseField name="contact_type" type="enum">
+  Contact type: `customer`, `supplier`, `optometrist`, `both`
+</ResponseField>
+
+<ResponseField name="identification_type" type="enum">
+  ID type: `rnc`, `cedula`, `passport`, `other`
+</ResponseField>
+
+<ResponseField name="identification_number" type="string">
+  ID or tax number
+</ResponseField>
+
+<ResponseField name="status" type="enum">
+  Contact status: `active`, `inactive`
+</ResponseField>
+
+<ResponseField name="credit_limit" type="decimal">
+  Credit limit for customer contacts
+</ResponseField>
+
+<ResponseField name="observations" type="string">
+  Additional notes or observations
+</ResponseField>
+
+<ResponseField name="birth_date" type="date">
+  Date of birth (for individual contacts)
+</ResponseField>
+
+<ResponseField name="gender" type="enum">
+  Gender: `male`, `female`, `other`
+</ResponseField>
+
+<ResponseField name="addresses" type="array">
+  Array of contact addresses
+</ResponseField>
+
+<ResponseField name="relationships" type="array">
+  Related contacts (family members, etc.)
+</ResponseField>
+
+---
+
+## List Contacts
+
+<api>GET /contacts</api>
+
+Retrieve a paginated list of contacts.
+
+### Query Parameters
+
+<ParamField query="page" type="integer" default="1">
+  Page number for pagination
+</ParamField>
+
+<ParamField query="per_page" type="integer" default="15">
+  Number of items per page
+</ParamField>
+
+<ParamField query="filter[contact_type]" type="string">
+  Filter by type: `customer`, `supplier`, `optometrist`
+</ParamField>
+
+<ParamField query="filter[status]" type="string">
+  Filter by status: `active`, `inactive`
+</ParamField>
+
+<ParamField query="search" type="string">
+  Search by name, email, phone, or ID number
+</ParamField>
+
+<ParamField query="sort" type="string" default="name">
+  Sort field: `name`, `email`, `-created_at`
+</ParamField>
+
+### Response
+
+<CodeGroup>
+
+```json 200 OK
+{
+  "data": [
+    {
+      "id": 45,
+      "name": "Acme Corporation",
+      "email": "contact@acme.com",
+      "phone": "+1-809-555-0123",
+      "contact_type": "customer",
+      "identification_type": "rnc",
+      "identification_number": "130123456",
+      "status": "active",
+      "credit_limit": "50000.00",
+      "primary_address": {
+        "street": "123 Main St",
+        "city": "Santo Domingo",
+        "country": "Dominican Republic"
+      },
+      "created_at": "2024-01-10T08:00:00Z",
+      "updated_at": "2024-03-15T10:30:00Z"
+    }
+  ],
+  "meta": {
+    "current_page": 1,
+    "last_page": 12,
+    "per_page": 15,
+    "total": 173
+  }
+}
+```
+
+</CodeGroup>
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -X GET "https://acme.yourdomain.com/api/v1/contacts?filter[contact_type]=customer&search=acme" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Accept: application/json"
+```
+
+```php PHP
+$contacts = Http::withToken($token)
+    ->get('https://acme.yourdomain.com/api/v1/contacts', [
+        'filter' => ['contact_type' => 'customer'],
+        'search' => 'acme'
+    ])
+    ->json('data');
+```
+
+```javascript JavaScript
+const { data: contacts } = await fetch(
+  'https://acme.yourdomain.com/api/v1/contacts?filter[contact_type]=customer',
+  {
+    headers: {
+      'Authorization': 'Bearer YOUR_TOKEN',
+      'Accept': 'application/json'
+    }
+  }
+).then(r => r.json());
+```
+
+</CodeGroup>
+
+---
+
+## Get Contact
+
+<api>GET /contacts/{id}</api>
+
+Retrieve a specific contact by ID, including related invoices, quotations, and prescriptions.
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  Contact ID
+</ParamField>
+
+### Response
+
+<CodeGroup>
+
+```json 200 OK
+{
+  "data": {
+    "id": 45,
+    "name": "Acme Corporation",
+    "email": "contact@acme.com",
+    "phone_primary": "+1-809-555-0123",
+    "mobile": "+1-809-555-0124",
+    "contact_type": "customer",
+    "identification_type": "rnc",
+    "identification_number": "130123456",
+    "status": "active",
+    "credit_limit": "50000.00",
+    "primary_address": {
+      "id": 78,
+      "street": "123 Main St",
+      "city": "Santo Domingo",
+      "state": "Distrito Nacional",
+      "postal_code": "10100",
+      "country": "Dominican Republic",
+      "is_primary": true
+    },
+    "addresses": [
+      {
+        "id": 78,
+        "street": "123 Main St",
+        "city": "Santo Domingo",
+        "is_primary": true
+      }
+    ],
+    "relationships": [
+      {
+        "id": 46,
+        "name": "Jane Doe",
+        "description": "Spouse"
+      }
+    ],
+    "stats": {
+      "total_invoices": 42,
+      "total_quotations": 15,
+      "total_invoiced": "125000.00",
+      "total_paid": "100000.00",
+      "pending_amount": "25000.00"
+    },
+    "invoices": [
+      // Latest 10 invoices
+    ],
+    "quotations": [
+      // Latest 10 quotations
+    ]
+  }
+}
+```
+
+</CodeGroup>
+
+---
+
+## Create Contact
+
+<api>POST /contacts</api>
+
+Create a new contact.
+
+### Request Body
+
+<ParamField body="name" type="string" required>
+  Contact name or company name
+</ParamField>
+
+<ParamField body="email" type="string">
+  Email address
+</ParamField>
+
+<ParamField body="phone_primary" type="string">
+  Primary phone number
+</ParamField>
+
+<ParamField body="phone_secondary" type="string">
+  Secondary phone number
+</ParamField>
+
+<ParamField body="mobile" type="string">
+  Mobile phone number
+</ParamField>
+
+<ParamField body="contact_type" type="enum" required>
+  Contact type: `customer`, `supplier`, `optometrist`, `both`
+</ParamField>
+
+<ParamField body="identification_type" type="enum">
+  ID type: `rnc`, `cedula`, `passport`, `other`
+</ParamField>
+
+<ParamField body="identification_number" type="string">
+  ID or tax number
+</ParamField>
+
+<ParamField body="status" type="enum" default="active">
+  Status: `active`, `inactive`
+</ParamField>
+
+<ParamField body="credit_limit" type="decimal" default="0">
+  Credit limit (for customers)
+</ParamField>
+
+<ParamField body="observations" type="string">
+  Additional notes
+</ParamField>
+
+<ParamField body="birth_date" type="date">
+  Date of birth (YYYY-MM-DD)
+</ParamField>
+
+<ParamField body="gender" type="enum">
+  Gender: `male`, `female`, `other`
+</ParamField>
+
+<ParamField body="primary_address" type="object">
+  Primary address information
+</ParamField>
+
+<ParamField body="primary_address.street" type="string">
+  Street address
+</ParamField>
+
+<ParamField body="primary_address.city" type="string">
+  City
+</ParamField>
+
+<ParamField body="primary_address.state" type="string">
+  State or province
+</ParamField>
+
+<ParamField body="primary_address.postal_code" type="string">
+  Postal code
+</ParamField>
+
+<ParamField body="primary_address.country" type="string">
+  Country
+</ParamField>
+
+### Response
+
+<CodeGroup>
+
+```json 201 Created
+{
+  "data": {
+    "id": 180,
+    "name": "New Customer Corp",
+    "email": "info@newcustomer.com",
+    "contact_type": "customer",
+    "status": "active",
+    "created_at": "2024-03-20T14:00:00Z"
+  },
+  "message": "Contact created successfully."
+}
+```
+
+```json 422 Validation Error
+{
+  "message": "The given data was invalid.",
+  "errors": {
+    "email": [
+      "The email has already been taken."
+    ],
+    "identification_number": [
+      "The identification number format is invalid."
+    ]
+  }
+}
+```
+
+</CodeGroup>
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://acme.yourdomain.com/api/v1/contacts \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "New Customer Corp",
+    "email": "info@newcustomer.com",
+    "phone_primary": "+1-809-555-9999",
+    "contact_type": "customer",
+    "identification_type": "rnc",
+    "identification_number": "130999888",
+    "credit_limit": 25000,
+    "primary_address": {
+      "street": "456 Business Ave",
+      "city": "Santiago",
+      "country": "Dominican Republic"
+    }
+  }'
+```
+
+```php PHP
+$contact = Http::withToken($token)
+    ->post('https://acme.yourdomain.com/api/v1/contacts', [
+        'name' => 'New Customer Corp',
+        'email' => 'info@newcustomer.com',
+        'phone_primary' => '+1-809-555-9999',
+        'contact_type' => 'customer',
+        'identification_type' => 'rnc',
+        'identification_number' => '130999888',
+        'credit_limit' => 25000,
+        'primary_address' => [
+            'street' => '456 Business Ave',
+            'city' => 'Santiago',
+            'country' => 'Dominican Republic',
+        ],
+    ])
+    ->json('data');
+```
+
+</CodeGroup>
+
+---
+
+## Update Contact
+
+<api>PATCH /contacts/{id}</api>
+
+Update an existing contact.
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  Contact ID
+</ParamField>
+
+### Request Body
+
+Same as Create Contact. All fields are optional.
+
+### Response
+
+```json
+{
+  "data": {
+    "id": 180,
+    "credit_limit": "35000.00",
+    "updated_at": "2024-03-20T15:30:00Z"
+  },
+  "message": "El contacto ha sido actualizado exitosamente."
+}
+```
+
+---
+
+## Delete Contact
+
+<api>DELETE /contacts/{id}</api>
+
+Delete a contact.
+
+<Warning>
+  Contacts with associated invoices, quotations, or payments cannot be deleted. Set their status to `inactive` instead.
+</Warning>
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  Contact ID
+</ParamField>
+
+### Response
+
+```json
+{
+  "message": "El contacto ha sido eliminado exitosamente."
+}
+```
+
+---
+
+## Check Duplicates
+
+<api>GET /api/contacts/check-duplicates</api>
+
+Check if a contact with the same email or identification number already exists.
+
+### Query Parameters
+
+<ParamField query="email" type="string">
+  Email to check
+</ParamField>
+
+<ParamField query="identification_number" type="string">
+  ID number to check
+</ParamField>
+
+### Response
+
+```json
+{
+  "duplicates": [
+    {
+      "id": 45,
+      "name": "Acme Corporation",
+      "email": "contact@acme.com",
+      "match_type": "email"
+    }
+  ]
+}
+```
+
+---
+
+## Manage Relationships
+
+Contacts can be related to other contacts (useful for family members, business partners, etc.).
+
+### Add Relationship
+
+<api>POST /contacts/{id}/relationships</api>
+
+Link a related contact.
+
+#### Request Body
+
+<ParamField body="related_contact_id" type="integer" required>
+  ID of the contact to relate
+</ParamField>
+
+<ParamField body="description" type="string">
+  Relationship description (e.g., "Spouse", "Parent", "Business Partner")
+</ParamField>
+
+### Remove Relationship
+
+<api>DELETE /contacts/{id}/relationships/{related_id}</api>
+
+Remove a contact relationship.
+
+---
+
+## Contact Import
+
+Bulk import contacts from CSV files.
+
+### Create Import
+
+<api>POST /contact-imports</api>
+
+Upload a CSV file for import.
+
+### Process Import
+
+<api>POST /contact-imports/{id}/process</api>
+
+Process the uploaded file and create contacts.
+
+---
+
+## Search Contacts
+
+The search functionality works across multiple fields:
+
+```bash
+curl -X GET "https://acme.yourdomain.com/api/v1/contacts?search=john" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+Searches:
+- Name
+- Email
+- Phone numbers
+- Identification number
+
+---
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Invoices" icon="file-invoice" href="/api/invoices">
+    Create invoices for contacts
+  </Card>
+  <Card title="Quotations" icon="file-alt" href="/api/quotations">
+    Send quotations to contacts
+  </Card>
+  <Card title="Payments" icon="credit-card" href="#">
+    Track customer payments
+  </Card>
+</CardGroup>

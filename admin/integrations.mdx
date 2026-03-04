@@ -1,0 +1,463 @@
+---
+title: Third-Party Integrations
+description: Configure integrations with Telegram, WhatsApp, email, and DGII
+---
+
+OptiFlow integrates with various third-party services to extend functionality. This includes messaging platforms (Telegram, WhatsApp), email services (Resend), and Dominican tax authority data synchronization (DGII).
+
+## Available Integrations
+
+OptiFlow supports the following integrations:
+
+1. **Telegram Bots** - Send notifications and updates via Telegram
+2. **WhatsApp Accounts** - Send messages and documents via WhatsApp
+3. **Email (Resend)** - Transactional email delivery
+4. **DGII Data Sync** - Synchronize RNC data from Dominican tax authority
+
+## Telegram Bot Integration
+
+### Overview
+
+Telegram bots allow you to send automated notifications, invoices, and updates to users via Telegram messenger.
+
+### Setting Up a Telegram Bot
+
+<Steps>
+  <Step title="Create Bot with BotFather">
+    In Telegram, search for `@BotFather` and create a new bot:
+    ```
+    /newbot
+    ```
+    Follow the prompts to get your bot token.
+  </Step>
+  
+  <Step title="Configure in OptiFlow">
+    Navigate to Telegram Bots section and add your bot:
+    - Bot name
+    - Bot token (from BotFather)
+    - Optional: webhook URL
+  </Step>
+  
+  <Step title="Test the Bot">
+    Use the test functionality to send a test message
+  </Step>
+</Steps>
+
+### TelegramBot Model
+
+Telegram bots are workspace-scoped:
+
+```php
+use App\Models\TelegramBot;
+
+$bot = TelegramBot::where('workspace_id', $currentWorkspace->id)
+    ->where('name', 'Notifications Bot')
+    ->first();
+```
+
+### Managing Telegram Bots
+
+The `TelegramBotController` (`app/Http/Controllers/TelegramBotController.php:19`) provides:
+
+- `index()` - List all bots for current workspace
+- `create()` - Show create form
+- `store()` - Create new bot using `CreateTelegramBotAction`
+- `edit()` - Edit existing bot
+- `update()` - Update bot using `UpdateTelegramBotAction`
+- `destroy()` - Delete bot using `DeleteTelegramBotAction`
+
+### Creating a Telegram Bot
+
+```php
+use App\Actions\CreateTelegramBotAction;
+
+$action = new CreateTelegramBotAction();
+$action->handle($user, [
+    'name' => 'Invoice Notifications',
+    'token' => 'YOUR_BOT_TOKEN_HERE',
+    'webhook_url' => 'https://your-domain.com/webhook/telegram',
+]);
+```
+
+### Testing Telegram Messages
+
+Use `TestTelegramBotMessageController` to test bot functionality:
+
+```php
+// Send test message
+POST /telegram-bots/{bot}/test
+{
+    "chat_id": "123456789",
+    "message": "Test message from OptiFlow"
+}
+```
+
+### Listing Telegram Bots
+
+Get all bots for current workspace:
+
+```php
+use App\Http\Controllers\ListTelegramBotsController;
+
+// Returns all Telegram bots for the authenticated user's workspace
+GET /api/telegram-bots
+```
+
+<Note>
+Telegram bots are scoped to workspaces, so each workspace can have its own set of bots for different notification purposes.
+</Note>
+
+## WhatsApp Integration
+
+### Overview
+
+WhatsApp integration allows sending messages, invoices, and documents directly to customers via WhatsApp Business API.
+
+### WhatsApp Account Model
+
+WhatsApp accounts are managed through the `WhatsappAccount` model:
+
+```php
+use App\Models\WhatsappAccount;
+
+$account = WhatsappAccount::where('workspace_id', $workspace->id)->first();
+```
+
+### Configuring WhatsApp
+
+WhatsApp accounts are managed via `WhatsappAccountController`:
+
+<Steps>
+  <Step title="Obtain WhatsApp Business API Access">
+    Register for WhatsApp Business API through a provider (e.g., Twilio, MessageBird)
+  </Step>
+  
+  <Step title="Configure in OptiFlow">
+    Add your WhatsApp account credentials:
+    - Account name
+    - Phone number
+    - API credentials
+    - Webhook settings
+  </Step>
+  
+  <Step title="Set Up Templates">
+    Configure message templates for invoices, reminders, etc.
+  </Step>
+</Steps>
+
+### WhatsApp Account Templates
+
+List available message templates:
+
+```php
+use App\Http\Controllers\ListWhatsappAccountTemplatesController;
+
+// Get all templates for a WhatsApp account
+GET /api/whatsapp-accounts/{account}/templates
+```
+
+### Listing WhatsApp Accounts
+
+```php
+use App\Http\Controllers\ListWhatsappAccountsController;
+
+// Get all WhatsApp accounts for current workspace
+GET /api/whatsapp-accounts
+```
+
+<Warning>
+WhatsApp Business API requires approval for message templates. Plan your templates in advance and submit them for approval before using them in production.
+</Warning>
+
+## Email Configuration (Resend)
+
+### Overview
+
+OptiFlow uses [Resend](https://resend.com) for reliable transactional email delivery.
+
+### Configuration
+
+Email settings are configured in `.env`:
+
+```env
+MAIL_MAILER=resend
+MAIL_FROM_ADDRESS="noreply@optiflow.com.do"
+MAIL_FROM_NAME="OptiFlow"
+RESEND_API_KEY="re_xxxxxxxxxxxxx"
+```
+
+### Setting Up Resend
+
+<Steps>
+  <Step title="Create Resend Account">
+    Sign up at [resend.com](https://resend.com)
+  </Step>
+  
+  <Step title="Get API Key">
+    Generate an API key from your Resend dashboard
+  </Step>
+  
+  <Step title="Configure Domain">
+    Add and verify your sending domain in Resend
+  </Step>
+  
+  <Step title="Update .env">
+    Add your Resend API key to the `.env` file
+  </Step>
+</Steps>
+
+### Sending Emails
+
+OptiFlow uses Laravel's mail system:
+
+```php
+use Illuminate\Support\Facades\Mail;
+use App\Mail\InvoiceCreated;
+
+// Send invoice email
+Mail::to($customer->email)->send(new InvoiceCreated($invoice));
+```
+
+### Email Templates
+
+Email templates are typically Blade views in `resources/views/emails/`:
+
+```blade
+{{-- resources/views/emails/invoice-created.blade.php --}}
+@component('mail::message')
+# Nueva Factura
+
+Se ha generado una nueva factura: {{ $invoice->ncf }}
+
+@component('mail::button', ['url' => $invoiceUrl])
+Ver Factura
+@endcomponent
+
+Gracias,<br>
+{{ config('app.name') }}
+@endcomponent
+```
+
+## DGII Data Sync
+
+### Overview
+
+The DGII (Dirección General de Impuestos Internos) is the Dominican Republic tax authority. OptiFlow can synchronize RNC (tax ID) data from DGII to validate and auto-fill company information.
+
+### RNC Model
+
+The `RNC` model stores DGII data:
+
+```php
+use App\Models\RNC;
+
+$rncData = RNC::where('identification', '131-12345-6')->first();
+
+echo $rncData->name;            // Legal name
+echo $rncData->comercial_name;  // Commercial name
+echo $rncData->status;          // Tax status
+```
+
+### Running DGII Sync
+
+The `SyncDGII` command (`app/Console/Commands/SyncDGII.php:16`) downloads and imports DGII data:
+
+```bash
+php artisan sync:dgii
+```
+
+This command:
+
+<Steps>
+  <Step title="Download DGII Data">
+    Downloads the official RNC database from DGII:
+    ```
+    https://dgii.gov.do/app/WebApps/Consultas/RNC/DGII_RNC.zip
+    ```
+  </Step>
+  
+  <Step title="Extract Files">
+    Extracts the ZIP file and locates the TXT database file
+  </Step>
+  
+  <Step title="Import to Database">
+    Imports all RNC records into the `rncs` table using batch upserts
+  </Step>
+  
+  <Step title="Cleanup">
+    Removes temporary files and folders
+  </Step>
+</Steps>
+
+### Scheduling DGII Sync
+
+Schedule the sync to run automatically:
+
+```php
+// In routes/console.php or a service provider
+Schedule::command('sync:dgii')->weekly();
+```
+
+<Note>
+The DGII database is large (hundreds of thousands of records). The sync process may take several minutes. It's recommended to run it during off-peak hours.
+</Note>
+
+### Using RNC Data
+
+Validate and auto-fill company information:
+
+```php
+use App\Models\RNC;
+
+// When user enters an RNC, look it up
+$rnc = request('rnc'); // e.g., "131-12345-6"
+
+$rncData = RNC::where('identification', $rnc)->first();
+
+if ($rncData) {
+    // Auto-fill form fields
+    $companyName = $rncData->name;
+    $comercialName = $rncData->comercial_name;
+    $status = $rncData->status; // "ACTIVO" or "INACTIVO"
+    
+    // Check if RNC is active
+    if ($status !== 'ACTIVO') {
+        // Warn user that RNC is not active
+    }
+}
+```
+
+### RNC Search
+
+Implement RNC search functionality:
+
+```php
+// Search by RNC or name
+$results = RNC::query()
+    ->where('identification', 'like', "%{$search}%")
+    ->orWhere('name', 'like', "%{$search}%")
+    ->orWhere('comercial_name', 'like', "%{$search}%")
+    ->limit(10)
+    ->get();
+```
+
+## Integration Best Practices
+
+### Error Handling
+
+Always handle integration failures gracefully:
+
+```php
+use App\Exceptions\ActionValidationException;
+
+try {
+    $telegramAction->handle($user, $data);
+} catch (ActionValidationException $e) {
+    // Log error
+    Log::error('Telegram bot creation failed', [
+        'user_id' => $user->id,
+        'error' => $e->getMessage(),
+    ]);
+    
+    // Show user-friendly error
+    return back()->withErrors([
+        'telegram' => 'Failed to create Telegram bot. Please check your token.'
+    ]);
+}
+```
+
+### Rate Limiting
+
+Implement rate limiting for API calls:
+
+```php
+use Illuminate\Support\Facades\RateLimiter;
+
+$executed = RateLimiter::attempt(
+    'send-whatsapp:' . $account->id,
+    $perMinute = 10,
+    function() use ($account, $message) {
+        // Send WhatsApp message
+    }
+);
+
+if (!$executed) {
+    return 'Too many messages sent';
+}
+```
+
+### Webhook Security
+
+Validate webhook requests:
+
+```php
+// Verify Telegram webhook
+if (!$this->verifyTelegramSignature($request)) {
+    abort(403);
+}
+
+// Verify WhatsApp webhook
+if (!$this->verifyWhatsappSignature($request)) {
+    abort(403);
+}
+```
+
+### Logging
+
+Log all integration activities:
+
+```php
+Log::channel('integrations')->info('Telegram message sent', [
+    'bot_id' => $bot->id,
+    'chat_id' => $chatId,
+    'message_type' => 'invoice',
+    'invoice_id' => $invoice->id,
+]);
+```
+
+## Monitoring Integrations
+
+Monitor integration health:
+
+```php
+namespace App\Console\Commands;
+
+class CheckIntegrations extends Command
+{
+    protected $signature = 'integrations:check';
+    
+    public function handle()
+    {
+        // Check Telegram bots
+        $inactiveBots = TelegramBot::where('is_active', true)
+            ->whereHas('failedAttempts', function($q) {
+                $q->where('failed_at', '>', now()->subHour());
+            })
+            ->get();
+        
+        if ($inactiveBots->count() > 0) {
+            // Alert administrators
+        }
+        
+        // Check email service
+        try {
+            Mail::raw('Test', function($msg) {
+                $msg->to('admin@example.com');
+            });
+        } catch (\Exception $e) {
+            // Alert: Email service down
+        }
+        
+        $this->info('Integration check completed.');
+    }
+}
+```
+
+## Related Resources
+
+- [Company Details](/admin/company-details) - RNC configuration
+- [Workspace Management](/admin/workspace-management) - Workspace-scoped integrations
+- [Multi-Tenancy](/admin/multi-tenancy) - Tenant isolation for integrations
+- [Resend Documentation](https://resend.com/docs) - Email service docs
+- [Telegram Bot API](https://core.telegram.org/bots/api) - Telegram integration docs
+- [DGII Portal](https://dgii.gov.do) - Dominican tax authority

@@ -1,97 +1,282 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+mode: "custom"
 ---
 
-## Setting up
+<div className="relative overflow-hidden bg-gradient-to-br from-[#3b82f6] via-[#2563eb] to-[#1e40af] dark:from-[#1e3a8a] dark:via-[#1e40af] dark:to-[#1d4ed8]">
+  <div className="absolute inset-0 bg-black/10 dark:bg-black/30"></div>
+  <div className="relative py-20 px-6 max-w-7xl mx-auto">
+    <div className="grid lg:grid-cols-12 gap-12 items-center">
+      <div className="lg:col-span-7">
+        <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold text-white mb-6 leading-tight">
+          OptiFlow Documentation
+        </h1>
+        <p className="text-xl sm:text-2xl text-white/90 mb-8 max-w-2xl">
+          Complete operations management for optical stores. Manage inventory, invoicing, contacts, and workflows in one powerful platform.
+        </p>
+        <div className="flex flex-wrap gap-4">
+          <a 
+            href="/quickstart" 
+            className="inline-flex items-center px-8 py-3.5 rounded-lg bg-white text-[#2563eb] font-semibold hover:bg-white/90 transition-colors no-underline"
+          >
+            Get Started
+            <svg className="ml-2 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+            </svg>
+          </a>
+          <a 
+            href="/api/overview" 
+            className="inline-flex items-center px-8 py-3.5 rounded-lg border-2 border-white/30 bg-white/10 text-white font-semibold hover:bg-white/20 transition-colors no-underline"
+          >
+            API Reference
+          </a>
+        </div>
+      </div>
+      <div className="lg:col-span-5 hidden lg:block">
+        <div className="relative">
+          <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-white/5 rounded-2xl transform rotate-3"></div>
+          <div className="relative bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20">
+            <div className="space-y-3">
+              <div className="h-3 bg-white/30 rounded w-3/4"></div>
+              <div className="h-3 bg-white/20 rounded w-full"></div>
+              <div className="h-3 bg-white/20 rounded w-5/6"></div>
+              <div className="grid grid-cols-2 gap-3 pt-4">
+                <div className="h-16 bg-white/20 rounded-lg"></div>
+                <div className="h-16 bg-white/20 rounded-lg"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
-Get your documentation site up and running in minutes.
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <div className="text-center mb-12">
+    <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+      Quick Start
+    </h2>
+    <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+      Get your optical store management system up and running in minutes
+    </p>
+  </div>
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
+  <Steps>
+    <Step title="Install Dependencies">
+      Clone the repository and install the required dependencies for both PHP and JavaScript.
 
-## Make it yours
+      ```bash
+      git clone https://github.com/luisscruza/optiflow
+      cd optiflow
+      composer install
+      npm install
+      ```
+    </Step>
 
-Design a docs site that looks great and empowers your users.
+    <Step title="Configure Environment">
+      Set up your environment variables and generate the application key.
 
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
-  </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
-  </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
-  </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
-  </Card>
-</Columns>
+      ```bash
+      cp .env.example .env
+      php artisan key:generate
+      ```
 
-## Create beautiful pages
+      <Note>
+        OptiFlow uses SQLite by default. For production, configure your preferred database in the `.env` file.
+      </Note>
+    </Step>
 
-Everything you need to create world-class documentation.
+    <Step title="Run Migrations">
+      Initialize your database with the required tables.
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+      ```bash
+      php artisan migrate
+      ```
+    </Step>
 
-## Need inspiration?
+    <Step title="Access Your Application">
+      Start the development server and access OptiFlow.
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+      ```bash
+      composer run dev
+      ```
+
+      Your application will be available at:
+      - **Tenant Portal**: `https://tenant.optiflow.test`
+      - **Admin Panel**: `https://optiflow.test/admin`
+
+      <Tip>
+        Using Laravel Herd? Your application is automatically available at these URLs without additional configuration.
+      </Tip>
+    </Step>
+  </Steps>
+</div>
+
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <div className="text-center mb-12">
+    <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+      Explore Core Features
+    </h2>
+    <p className="text-lg text-gray-600 dark:text-gray-400">
+      Everything you need to manage your optical store operations
+    </p>
+  </div>
+
+  <CardGroup cols={3}>
+    <Card title="Multi-Workspace" icon="building" href="/features/multi-workspace">
+      Manage multiple store locations with complete tenant isolation and workspace-based access control.
+    </Card>
+    <Card title="Product Catalog" icon="box" href="/features/product-catalog">
+      Complete product management with pricing, stock tracking, and detailed product information.
+    </Card>
+    <Card title="Inventory Management" icon="warehouse" href="/features/inventory-management">
+      Real-time stock tracking, movements, and transfers between workspaces with full audit trails.
+    </Card>
+    <Card title="Invoicing" icon="file-invoice" href="/features/invoicing">
+      Professional invoice generation with PDF export, tax calculations, and payment tracking.
+    </Card>
+    <Card title="Quotations" icon="file-lines" href="/features/quotations">
+      Create quotations and seamlessly convert them to invoices when customers are ready.
+    </Card>
+    <Card title="Contact Management" icon="address-book" href="/features/contacts">
+      Comprehensive customer and supplier directory with relationship tracking.
+    </Card>
+  </CardGroup>
+</div>
+
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <div className="text-center mb-12">
+    <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+      Learn by Topic
+    </h2>
+    <p className="text-lg text-gray-600 dark:text-gray-400">
+      Step-by-step guides for common workflows
+    </p>
+  </div>
+
+  <div className="grid md:grid-cols-2 gap-6">
+    <a href="/guides/creating-invoices" className="group block rounded-2xl border border-gray-200 dark:border-[#27272a] hover:border-[#3b82f6] dark:hover:border-[#3b82f6] overflow-hidden transition-colors no-underline bg-white dark:bg-[#1a1d27]">
+      <div className="p-6">
+        <div className="flex items-start gap-4">
+          <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+            <svg className="w-6 h-6 text-[#3b82f6]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+          </div>
+          <div className="flex-1">
+            <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2 group-hover:text-[#3b82f6]">
+              Creating Invoices
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+              Learn how to create professional invoices with tax calculations and PDF generation.
+            </p>
+            <div className="flex items-center text-sm font-medium text-[#3b82f6] group-hover:gap-2 transition-all">
+              Read guide
+              <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </a>
+
+    <a href="/guides/managing-inventory" className="group block rounded-2xl border border-gray-200 dark:border-[#27272a] hover:border-[#3b82f6] dark:hover:border-[#3b82f6] overflow-hidden transition-colors no-underline bg-white dark:bg-[#1a1d27]">
+      <div className="p-6">
+        <div className="flex items-start gap-4">
+          <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+            <svg className="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+            </svg>
+          </div>
+          <div className="flex-1">
+            <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2 group-hover:text-[#3b82f6]">
+              Managing Inventory
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+              Track stock levels, record movements, and maintain accurate inventory across locations.
+            </p>
+            <div className="flex items-center text-sm font-medium text-[#3b82f6] group-hover:gap-2 transition-all">
+              Read guide
+              <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </a>
+
+    <a href="/guides/stock-transfers" className="group block rounded-2xl border border-gray-200 dark:border-[#27272a] hover:border-[#3b82f6] dark:hover:border-[#3b82f6] overflow-hidden transition-colors no-underline bg-white dark:bg-[#1a1d27]">
+      <div className="p-6">
+        <div className="flex items-start gap-4">
+          <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+            <svg className="w-6 h-6 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+            </svg>
+          </div>
+          <div className="flex-1">
+            <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2 group-hover:text-[#3b82f6]">
+              Stock Transfers
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+              Transfer inventory between workspaces with automatic stock adjustments and tracking.
+            </p>
+            <div className="flex items-center text-sm font-medium text-[#3b82f6] group-hover:gap-2 transition-all">
+              Read guide
+              <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </a>
+
+    <a href="/workflows/automations" className="group block rounded-2xl border border-gray-200 dark:border-[#27272a] hover:border-[#3b82f6] dark:hover:border-[#3b82f6] overflow-hidden transition-colors no-underline bg-white dark:bg-[#1a1d27]">
+      <div className="p-6">
+        <div className="flex items-start gap-4">
+          <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
+            <svg className="w-6 h-6 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+          </div>
+          <div className="flex-1">
+            <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2 group-hover:text-[#3b82f6]">
+              Workflow Automation
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+              Build custom automations with the visual workflow builder to streamline operations.
+            </p>
+            <div className="flex items-center text-sm font-medium text-[#3b82f6] group-hover:gap-2 transition-all">
+              Read guide
+              <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </a>
+  </div>
+</div>
+
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <div className="rounded-2xl bg-gradient-to-r from-[#3b82f6] to-[#2563eb] dark:from-[#1e40af] dark:to-[#1d4ed8] p-12 text-center">
+    <h2 className="text-3xl font-bold text-white mb-4">
+      Ready to get started?
+    </h2>
+    <p className="text-xl text-white/90 mb-8 max-w-2xl mx-auto">
+      Follow our quickstart guide to have OptiFlow running in your environment in just a few minutes.
+    </p>
+    <a 
+      href="/quickstart" 
+      className="inline-flex items-center px-8 py-3.5 rounded-lg bg-white text-[#2563eb] font-semibold hover:bg-white/90 transition-colors no-underline"
+    >
+      Get Started Now
+      <svg className="ml-2 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+      </svg>
+    </a>
+  </div>
+</div>

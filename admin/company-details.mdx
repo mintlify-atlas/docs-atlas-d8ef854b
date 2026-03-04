@@ -1,0 +1,284 @@
+---
+title: Company Details Configuration
+description: Setting up company information for invoices and documents
+---
+
+Company Details store essential business information that appears on invoices, quotations, and other documents. This includes company name, tax identification, address, contact information, and branding elements.
+
+## Overview
+
+The `CompanyDetail` model (`app/Models/CompanyDetail.php:27`) provides a flexible key-value store for company information within each tenant.
+
+<Note>
+Company details are stored at the tenant level, not workspace level. All workspaces within a tenant share the same company details.
+</Note>
+
+## Company Detail Fields
+
+Common company detail keys:
+
+| Key | Description | Example |
+|-----|-------------|----------|
+| `name` | Legal company name | "Óptica Modelo S.R.L." |
+| `comercial_name` | Commercial/trading name | "Óptica Modelo" |
+| `rnc` | Tax ID (RNC for Dominican Republic) | "131-12345-6" |
+| `address` | Physical address | "Av. Principal #123, Santo Domingo" |
+| `phone` | Primary phone number | "(809) 555-1234" |
+| `email` | Contact email | "info@opticamodelo.com" |
+| `website` | Company website | "https://opticamodelo.com" |
+| `logo` | Logo file path | "logos/company-logo.png" |
+| `tax_rate` | Default tax rate | "18" |
+| `currency` | Default currency code | "DOP" |
+
+### Custom Fields
+
+You can store any custom key-value pairs:
+
+```php
+CompanyDetail::setByKey('slogan', 'Vemos por su salud visual');
+CompanyDetail::setByKey('business_hours', 'Lun-Sáb 9AM-6PM');
+```
+
+## Setting Up Company Information
+
+### Using the Controller
+
+The `CompanyDetailsController` (`app/Http/Controllers/CompanyDetailsController.php:15`) handles company detail management:
+
+<Steps>
+  <Step title="Navigate to Company Details">
+    Access the company details configuration page:
+    ```
+    GET /configuration/company-details/edit
+    ```
+  </Step>
+  
+  <Step title="Edit Company Information">
+    The edit form displays current company details with fields for:
+    - Basic information (name, RNC, address)
+    - Contact details (phone, email, website)
+    - Logo upload
+    - Tax and currency settings
+  </Step>
+  
+  <Step title="Save Changes">
+    Submit the form to update company details:
+    ```
+    PUT /configuration/company-details
+    ```
+  </Step>
+</Steps>
+
+### Programmatic Access
+
+The `CompanyDetail` model provides convenient static methods:
+
+```php
+use App\Models\CompanyDetail;
+
+// Get a single detail by key
+$companyName = CompanyDetail::getByKey('name', 'Default Name');
+
+// Set a detail
+CompanyDetail::setByKey('phone', '(809) 555-1234');
+
+// Get all details as array
+$allDetails = CompanyDetail::getAll();
+// Returns: ['name' => '...', 'rnc' => '...', ...]
+```
+
+### Using UpdateCompanyDetailsAction
+
+The recommended way to update company details:
+
+```php
+use App\Actions\UpdateCompanyDetailsAction;
+
+$action = new UpdateCompanyDetailsAction();
+$action->handle($validatedData, $logoFile);
+```
+
+This action:
+1. Validates the input data
+2. Handles logo file upload if provided
+3. Updates all company detail records
+4. Returns success/failure status
+
+## Logo Management
+
+### Uploading a Company Logo
+
+Logos are stored in tenant-specific storage:
+
+```php
+// In controller
+if ($request->hasFile('logo')) {
+    $logoPath = $request->file('logo')->store('logos', 'public');
+    CompanyDetail::setByKey('logo', $logoPath);
+}
+```
+
+### Displaying the Logo
+
+Use the `tenant_asset()` helper to generate the correct URL:
+
+```php
+$logoPath = CompanyDetail::getByKey('logo');
+
+if ($logoPath) {
+    $logoUrl = tenant_asset($logoPath);
+    // Use $logoUrl in views/documents
+}
+```
+
+<Warning>
+Always use `tenant_asset()` instead of `asset()` for tenant-specific files to ensure proper file isolation between tenants.
+</Warning>
+
+## Using Company Details in Documents
+
+### In Invoice Generation
+
+Company details are typically used when generating invoices, quotations, and receipts:
+
+```php
+$companyDetails = CompanyDetail::getAll();
+
+$invoice->company_name = $companyDetails['name'] ?? '';
+$invoice->company_rnc = $companyDetails['rnc'] ?? '';
+$invoice->company_address = $companyDetails['address'] ?? '';
+```
+
+### In PDF Templates
+
+Access company details in Blade templates:
+
+```blade
+@php
+    $company = \App\Models\CompanyDetail::getAll();
+@endphp
+
+<div class="company-header">
+    @if(!empty($company['logo']))
+        <img src="{{ tenant_asset($company['logo']) }}" alt="Company Logo">
+    @endif
+    
+    <h1>{{ $company['name'] ?? 'Company Name' }}</h1>
+    <p>RNC: {{ $company['rnc'] ?? 'N/A' }}</p>
+    <p>{{ $company['address'] ?? '' }}</p>
+    <p>Tel: {{ $company['phone'] ?? '' }}</p>
+</div>
+```
+
+### In Email Templates
+
+Include company details in email notifications:
+
+```php
+use App\Models\CompanyDetail;
+
+class InvoiceCreated extends Notification
+{
+    public function toMail($notifiable)
+    {
+        $company = CompanyDetail::getAll();
+        
+        return (new MailMessage)
+            ->subject('Nueva Factura - ' . ($company['name'] ?? 'OptiFlow'))
+            ->line('Se ha generado una nueva factura.')
+            // ...
+    }
+}
+```
+
+## Dominican Republic Specific: RNC
+
+### RNC Format
+
+The RNC (Registro Nacional de Contribuyentes) is the Dominican tax identification number. Format:
+
+- Format: `XXX-XXXXX-X` (9 digits with dashes)
+- Example: `131-12345-6`
+
+### RNC Validation
+
+Implement RNC validation in your form request:
+
+```php
+use Illuminate\Validation\Rule;
+
+public function rules(): array
+{
+    return [
+        'rnc' => [
+            'required',
+            'string',
+            'regex:/^\d{3}-\d{5}-\d{1}$/', // Format: XXX-XXXXX-X
+        ],
+        // ...
+    ];
+}
+```
+
+### DGII Integration
+
+OptiFlow can sync RNC data from DGII (Dominican tax authority) using the `sync:dgii` command. See [Integrations - DGII Sync](/admin/integrations#dgii-sync) for details.
+
+## Company Details Per Workspace
+
+While company details are tenant-wide, you can implement workspace-specific overrides:
+
+```php
+// Store workspace-specific details in workspace settings
+$workspace->settings = array_merge($workspace->settings ?? [], [
+    'company_name_override' => 'Branch Office Name',
+    'address_override' => 'Branch Address',
+]);
+$workspace->save();
+
+// Retrieve with fallback to tenant details
+$companyName = $workspace->settings['company_name_override'] 
+    ?? CompanyDetail::getByKey('name');
+```
+
+<Note>
+Workspace-specific company details are not built-in but can be implemented using workspace settings as shown above.
+</Note>
+
+## Best Practices
+
+1. **Complete Information**: Fill out all relevant company details for professional-looking documents
+2. **Logo Optimization**: Use optimized image files (PNG/SVG) for logos, max 500KB
+3. **Consistent Formatting**: Use consistent phone number and address formats
+4. **Backup**: Include company details in your backup strategy
+5. **Validation**: Always validate RNC and other tax IDs according to local requirements
+6. **Multi-language**: Consider storing translated versions for multi-language support
+
+## Example: Complete Setup
+
+```php
+use App\Models\CompanyDetail;
+
+// Set all company details
+$details = [
+    'name' => 'Óptica Modelo S.R.L.',
+    'comercial_name' => 'Óptica Modelo',
+    'rnc' => '131-12345-6',
+    'address' => 'Av. Principal #123, Santo Domingo, República Dominicana',
+    'phone' => '(809) 555-1234',
+    'email' => 'info@opticamodelo.com',
+    'website' => 'https://opticamodelo.com',
+    'tax_rate' => '18',
+    'currency' => 'DOP',
+];
+
+foreach ($details as $key => $value) {
+    CompanyDetail::setByKey($key, $value);
+}
+```
+
+## Related Resources
+
+- [Workspace Management](/admin/workspace-management) - Managing workspaces
+- [Document Subtypes](/admin/document-subtypes) - NCF configuration for invoices
+- [Integrations](/admin/integrations) - DGII data synchronization

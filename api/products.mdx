@@ -1,0 +1,651 @@
+---
+title: 'Product Endpoints'
+description: 'Manage your product catalog via the API'
+icon: 'box'
+---
+
+## Overview
+
+The Products API allows you to manage your product catalog, including physical products, services, pricing, stock tracking, and tax configuration.
+
+## Product Object
+
+<ResponseField name="id" type="integer">
+  Unique identifier for the product
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  Product name
+</ResponseField>
+
+<ResponseField name="sku" type="string">
+  Stock Keeping Unit (unique identifier)
+</ResponseField>
+
+<ResponseField name="description" type="string">
+  Product description
+</ResponseField>
+
+<ResponseField name="product_type" type="enum">
+  Product type: `physical`, `service`, `digital`
+</ResponseField>
+
+<ResponseField name="price" type="decimal">
+  Sale price
+</ResponseField>
+
+<ResponseField name="cost" type="decimal">
+  Cost price (for profit margin calculations)
+</ResponseField>
+
+<ResponseField name="track_stock" type="boolean">
+  Whether to track inventory for this product
+</ResponseField>
+
+<ResponseField name="is_active" type="boolean">
+  Whether the product is active and available for sale
+</ResponseField>
+
+<ResponseField name="default_tax_id" type="integer">
+  Default tax to apply when adding to documents
+</ResponseField>
+
+<ResponseField name="profit" type="decimal">
+  Calculated profit (price - cost)
+</ResponseField>
+
+<ResponseField name="profit_margin" type="decimal">
+  Calculated profit margin percentage
+</ResponseField>
+
+<ResponseField name="created_at" type="timestamp">
+  Creation timestamp
+</ResponseField>
+
+<ResponseField name="updated_at" type="timestamp">
+  Last update timestamp
+</ResponseField>
+
+---
+
+## List Products
+
+<api>GET /products</api>
+
+Retrieve a paginated list of products.
+
+### Query Parameters
+
+<ParamField query="page" type="integer" default="1">
+  Page number for pagination
+</ParamField>
+
+<ParamField query="per_page" type="integer" default="15">
+  Number of items per page
+</ParamField>
+
+<ParamField query="filter[is_active]" type="boolean">
+  Filter by active status
+</ParamField>
+
+<ParamField query="filter[track_stock]" type="boolean">
+  Filter products that track stock
+</ParamField>
+
+<ParamField query="filter[product_type]" type="string">
+  Filter by product type: `physical`, `service`, `digital`
+</ParamField>
+
+<ParamField query="search" type="string">
+  Search by name, SKU, or description
+</ParamField>
+
+<ParamField query="sort" type="string" default="name">
+  Sort field: `name`, `sku`, `price`, `-created_at`
+</ParamField>
+
+### Response
+
+<CodeGroup>
+
+```json 200 OK
+{
+  "data": [
+    {
+      "id": 78,
+      "name": "Premium Product",
+      "sku": "PROD-001",
+      "description": "High quality premium product",
+      "product_type": "physical",
+      "price": "125.00",
+      "cost": "80.00",
+      "track_stock": true,
+      "is_active": true,
+      "default_tax_id": 1,
+      "profit": "45.00",
+      "profit_margin": "56.25",
+      "created_at": "2024-01-15T10:00:00Z",
+      "updated_at": "2024-03-10T14:30:00Z"
+    }
+  ],
+  "meta": {
+    "current_page": 1,
+    "last_page": 8,
+    "per_page": 15,
+    "total": 115
+  }
+}
+```
+
+</CodeGroup>
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -X GET "https://acme.yourdomain.com/api/v1/products?filter[is_active]=true&search=premium" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Accept: application/json"
+```
+
+```php PHP
+$products = Http::withToken($token)
+    ->get('https://acme.yourdomain.com/api/v1/products', [
+        'filter' => ['is_active' => true],
+        'search' => 'premium'
+    ])
+    ->json('data');
+```
+
+```javascript JavaScript
+const { data: products } = await fetch(
+  'https://acme.yourdomain.com/api/v1/products?filter[is_active]=true&search=premium',
+  {
+    headers: {
+      'Authorization': 'Bearer YOUR_TOKEN',
+      'Accept': 'application/json'
+    }
+  }
+).then(r => r.json());
+```
+
+</CodeGroup>
+
+<Note>
+  By default, only active products are returned. Products are scoped globally (not per workspace), but stock levels are workspace-specific.
+</Note>
+
+---
+
+## Get Product
+
+<api>GET /products/{id}</api>
+
+Retrieve a specific product by ID, including stock information.
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  Product ID
+</ParamField>
+
+### Response
+
+<CodeGroup>
+
+```json 200 OK
+{
+  "data": {
+    "id": 78,
+    "name": "Premium Product",
+    "sku": "PROD-001",
+    "description": "High quality premium product",
+    "product_type": "physical",
+    "price": "125.00",
+    "cost": "80.00",
+    "track_stock": true,
+    "is_active": true,
+    "default_tax_id": 1,
+    "profit": "45.00",
+    "profit_margin": "56.25",
+    "default_tax": {
+      "id": 1,
+      "name": "ITBIS",
+      "rate": "18.00"
+    },
+    "stock_in_current_workspace": {
+      "workspace_id": 2,
+      "quantity": "150.00",
+      "minimum_quantity": "20.00"
+    },
+    "workspace_stocks": [
+      {
+        "workspace_id": 1,
+        "workspace_name": "Main Store",
+        "quantity": "100.00",
+        "minimum_quantity": "20.00"
+      },
+      {
+        "workspace_id": 2,
+        "workspace_name": "Warehouse",
+        "quantity": "150.00",
+        "minimum_quantity": "50.00"
+      }
+    ],
+    "stock_movements": [
+      {
+        "id": 450,
+        "type": "sale",
+        "quantity": "-10.00",
+        "from_workspace_id": 2,
+        "created_at": "2024-03-20T10:30:00Z",
+        "created_by": {
+          "id": 5,
+          "name": "John Doe"
+        }
+      }
+    ]
+  }
+}
+```
+
+</CodeGroup>
+
+### Example
+
+```bash
+curl -X GET https://acme.yourdomain.com/api/v1/products/78 \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Accept: application/json"
+```
+
+---
+
+## Create Product
+
+<api>POST /products</api>
+
+Create a new product.
+
+### Request Body
+
+<ParamField body="name" type="string" required>
+  Product name
+</ParamField>
+
+<ParamField body="sku" type="string" required>
+  Unique SKU identifier
+</ParamField>
+
+<ParamField body="description" type="string">
+  Product description
+</ParamField>
+
+<ParamField body="product_type" type="enum" default="physical">
+  Product type: `physical`, `service`, `digital`
+</ParamField>
+
+<ParamField body="price" type="decimal" required>
+  Sale price
+</ParamField>
+
+<ParamField body="cost" type="decimal">
+  Cost price
+</ParamField>
+
+<ParamField body="track_stock" type="boolean" default="false">
+  Enable inventory tracking
+</ParamField>
+
+<ParamField body="is_active" type="boolean" default="true">
+  Product active status
+</ParamField>
+
+<ParamField body="default_tax_id" type="integer">
+  Default tax ID
+</ParamField>
+
+<ParamField body="workspace_stocks" type="array">
+  Initial stock quantities per workspace (only if track_stock is true)
+</ParamField>
+
+<ParamField body="workspace_stocks[].workspace_id" type="integer">
+  Workspace ID
+</ParamField>
+
+<ParamField body="workspace_stocks[].current_quantity" type="decimal">
+  Initial stock quantity
+</ParamField>
+
+<ParamField body="workspace_stocks[].minimum_quantity" type="decimal">
+  Minimum stock alert threshold
+</ParamField>
+
+### Response
+
+<CodeGroup>
+
+```json 201 Created
+{
+  "data": {
+    "id": 120,
+    "name": "New Product",
+    "sku": "PROD-120",
+    "price": "99.99",
+    "cost": "60.00",
+    "track_stock": true,
+    "is_active": true,
+    "created_at": "2024-03-20T15:00:00Z"
+  },
+  "message": "Producto creado correctamente."
+}
+```
+
+```json 422 Validation Error
+{
+  "message": "The given data was invalid.",
+  "errors": {
+    "sku": [
+      "The sku has already been taken."
+    ],
+    "price": [
+      "The price must be greater than 0."
+    ]
+  }
+}
+```
+
+</CodeGroup>
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://acme.yourdomain.com/api/v1/products \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "New Product",
+    "sku": "PROD-120",
+    "description": "A great new product",
+    "product_type": "physical",
+    "price": 99.99,
+    "cost": 60.00,
+    "track_stock": true,
+    "default_tax_id": 1,
+    "workspace_stocks": [
+      {
+        "workspace_id": 2,
+        "current_quantity": 100,
+        "minimum_quantity": 10
+      }
+    ]
+  }'
+```
+
+```php PHP
+$product = Http::withToken($token)
+    ->post('https://acme.yourdomain.com/api/v1/products', [
+        'name' => 'New Product',
+        'sku' => 'PROD-120',
+        'description' => 'A great new product',
+        'product_type' => 'physical',
+        'price' => 99.99,
+        'cost' => 60.00,
+        'track_stock' => true,
+        'default_tax_id' => 1,
+        'workspace_stocks' => [
+            [
+                'workspace_id' => 2,
+                'current_quantity' => 100,
+                'minimum_quantity' => 10,
+            ],
+        ],
+    ])
+    ->json('data');
+```
+
+```javascript JavaScript
+const { data: product } = await fetch(
+  'https://acme.yourdomain.com/api/v1/products',
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer YOUR_TOKEN',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      name: 'New Product',
+      sku: 'PROD-120',
+      price: 99.99,
+      cost: 60.00,
+      track_stock: true,
+      default_tax_id: 1,
+      workspace_stocks: [
+        {
+          workspace_id: 2,
+          current_quantity: 100,
+          minimum_quantity: 10
+        }
+      ]
+    })
+  }
+).then(r => r.json());
+```
+
+</CodeGroup>
+
+<Note>
+  Users can only set initial stock for workspaces they have access to. Users with the `view_all_locations` permission can set stock for all workspaces.
+</Note>
+
+---
+
+## Update Product
+
+<api>PATCH /products/{id}</api>
+
+Update an existing product.
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  Product ID
+</ParamField>
+
+### Request Body
+
+Same as Create Product. All fields are optional.
+
+<Warning>
+  Changing `track_stock` from `true` to `false` will delete all stock records. This action cannot be undone.
+</Warning>
+
+### Response
+
+```json
+{
+  "data": {
+    "id": 120,
+    "price": "109.99",
+    "updated_at": "2024-03-20T16:00:00Z"
+  },
+  "message": "Producto actualizado correctamente."
+}
+```
+
+---
+
+## Delete Product
+
+<api>DELETE /products/{id}</api>
+
+Delete (soft delete) a product.
+
+<Warning>
+  Products that have been used in invoices or quotations cannot be deleted. They can only be deactivated.
+</Warning>
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  Product ID
+</ParamField>
+
+### Response
+
+<CodeGroup>
+
+```json 200 OK
+{
+  "message": "Producto eliminado correctamente."
+}
+```
+
+```json 400 Bad Request
+{
+  "message": "Cannot delete product with existing invoice items."
+}
+```
+
+</CodeGroup>
+
+---
+
+## Activate Product
+
+<api>POST /products/{id}/activate</api>
+
+Activate a deactivated product.
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  Product ID
+</ParamField>
+
+### Response
+
+```json
+{
+  "message": "Product activated successfully."
+}
+```
+
+---
+
+## Deactivate Product
+
+<api>POST /products/{id}/deactivate</api>
+
+Deactivate an active product. Deactivated products cannot be added to new documents.
+
+### Path Parameters
+
+<ParamField path="id" type="integer" required>
+  Product ID
+</ParamField>
+
+### Response
+
+```json
+{
+  "message": "Product deactivated successfully."
+}
+```
+
+---
+
+## Quick Create Product
+
+<api>POST /products/quick-create</api>
+
+Quickly create a basic product with minimal information (useful for point-of-sale scenarios).
+
+### Request Body
+
+<ParamField body="name" type="string" required>
+  Product name
+</ParamField>
+
+<ParamField body="price" type="decimal" required>
+  Sale price
+</ParamField>
+
+### Response
+
+```json
+{
+  "data": {
+    "id": 121,
+    "name": "Quick Product",
+    "sku": "AUTO-121",
+    "price": "49.99",
+    "track_stock": false,
+    "is_active": true
+  }
+}
+```
+
+<Note>
+  Quick create automatically generates a SKU and sets sensible defaults. The product is created without inventory tracking.
+</Note>
+
+---
+
+## Search Products
+
+Products can be searched using the list endpoint with the `search` parameter, which searches across:
+
+- Product name
+- SKU
+- Description
+
+### Example
+
+```bash
+curl -X GET "https://acme.yourdomain.com/api/v1/products?search=laptop" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+---
+
+## Product Import
+
+Bulk import products from CSV or Excel files.
+
+### Create Import
+
+<api>POST /product-imports</api>
+
+Upload a file for import.
+
+### Process Import
+
+<api>POST /product-imports/{id}/process</api>
+
+Process the uploaded file and create products.
+
+### Download Template
+
+<api>GET /product-imports/template/download</api>
+
+Download a CSV template for bulk product imports.
+
+---
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Inventory" icon="warehouse" href="/api/inventory">
+    Manage product stock levels
+  </Card>
+  <Card title="Invoices" icon="file-invoice" href="/api/invoices">
+    Use products in invoices
+  </Card>
+  <Card title="Taxes" icon="percent" href="#">
+    Configure product taxes
+  </Card>
+</CardGroup>

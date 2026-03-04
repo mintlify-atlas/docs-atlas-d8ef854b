@@ -1,0 +1,442 @@
+---
+title: Contact Management
+description: Manage customers, suppliers, and business relationships with comprehensive contact information and activity tracking
+---
+
+## Overview
+
+OptiFlow's contact management system provides a centralized database for all your business relationships. Manage customers, suppliers, optometrists, and other contacts with detailed information, relationship tracking, and complete activity history.
+
+<Info>
+Contacts are workspace-scoped, meaning each workspace maintains its own separate contact database while sharing the same users across the platform.
+</Info>
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Multi-Type Contacts" icon="address-book">
+    Manage customers, suppliers, and optometrists with type-specific fields and workflows.
+  </Card>
+  
+  <Card title="Relationship Tracking" icon="diagram-project">
+    Link related contacts (family members, business partners) to share information and activity.
+  </Card>
+  
+  <Card title="Activity History" icon="clock-rotate-left">
+    View complete transaction history including invoices, quotations, prescriptions, and payments.
+  </Card>
+  
+  <Card title="Bulk Import" icon="file-import">
+    Import contacts from CSV files with duplicate detection and validation.
+  </Card>
+</CardGroup>
+
+## Contact Types
+
+<Tabs>
+  <Tab title="Customers">
+    Contacts who purchase products or services:
+    
+    - Credit limit tracking
+    - Payment history
+    - Outstanding balances
+    - Invoice generation
+    
+    ```php
+    // Create customer
+    $customer = Contact::create([
+        'contact_type' => ContactType::Customer,
+        'name' => 'John Smith',
+        'email' => 'john@example.com',
+        'credit_limit' => 5000.00,
+    ]);
+    
+    // Check if customer
+    if ($contact->isCustomer()) {
+        // Customer-specific logic
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Suppliers">
+    Contacts who supply products:
+    
+    - Product stock tracking
+    - Purchase order history
+    - Payment terms
+    
+    ```php
+    // Create supplier
+    $supplier = Contact::create([
+        'contact_type' => ContactType::Supplier,
+        'name' => 'ACME Supplies Inc',
+        'email' => 'orders@acme.com',
+    ]);
+    
+    // Get products supplied
+    $suppliedStocks = $supplier->suppliedStocks;
+    
+    // Check if supplier
+    if ($contact->isSupplier()) {
+        // Supplier-specific logic
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Optometrists">
+    Eye care professionals (specialized for optical businesses):
+    
+    - Prescription tracking
+    - Professional credentials
+    - Referral tracking
+    
+    ```php
+    // Create optometrist
+    $optometrist = Contact::create([
+        'contact_type' => ContactType::Optometrist,
+        'name' => 'Dr. Sarah Johnson',
+        'email' => 'dr.johnson@eyecare.com',
+    ]);
+    ```
+  </Tab>
+</Tabs>
+
+## Contact Information
+
+### Core Fields
+
+```php
+// Contact model (app/Models/Contact.php)
+$contact = Contact::create([
+    'workspace_id' => $workspace->id,
+    'contact_type' => ContactType::Customer,
+    'name' => 'John Smith',
+    'email' => 'john@example.com',
+    
+    // Phone numbers
+    'phone_primary' => '+1-555-0100',
+    'phone_secondary' => '+1-555-0101',
+    'mobile' => '+1-555-0102',
+    'fax' => '+1-555-0199',
+    
+    // Identification
+    'identification_type' => 'passport',
+    'identification_number' => 'AB123456',
+    
+    // Business info
+    'credit_limit' => 10000.00,
+    'status' => 'active',
+    'observations' => 'Preferred customer',
+    
+    // Custom data
+    'metadata' => [
+        'customer_since' => '2020-01-01',
+        'preferred_payment' => 'wire_transfer',
+    ],
+]);
+```
+
+### Contact Properties
+
+- **Name**: Full name or business name
+- **Email**: Primary email address
+- **Phone Numbers**: Primary, secondary, mobile, and fax
+- **Identification**: Type and number (passport, ID card, tax ID)
+- **Credit Limit**: Maximum credit allowed
+- **Status**: Active or inactive
+- **Observations**: Internal notes
+- **Metadata**: Custom JSON data
+
+## Address Management
+
+Contacts support multiple addresses:
+
+```php
+// Add address to contact
+$address = $contact->addresses()->create([
+    'address_line_1' => '123 Main Street',
+    'address_line_2' => 'Suite 100',
+    'city' => 'New York',
+    'state' => 'NY',
+    'postal_code' => '10001',
+    'country' => 'USA',
+    'is_primary' => true,
+]);
+
+// Get primary address
+$primaryAddress = $contact->primaryAddress;
+
+// Get all addresses
+$addresses = $contact->addresses;
+
+// Get formatted full address
+$fullAddress = $contact->full_address;
+```
+
+## Contact Relationships
+
+Link related contacts together:
+
+```php
+// Create relationship between contacts
+$contact->relationships()->attach($relatedContact->id, [
+    'description' => 'Spouse',
+]);
+
+// Get all related contacts
+$relatedContacts = $contact->relationships;
+
+// Get contact IDs including self and related
+$allContactIds = $contact->relatedContactIdsWithSelf();
+// [1, 4, 7] - Includes this contact + related contacts
+```
+
+### Use Cases for Relationships
+
+- **Family Members**: Link family members to share invoices and prescriptions
+- **Business Partners**: Connect related business entities
+- **Parent-Child Companies**: Link corporate structures
+- **Referral Networks**: Track referral sources
+
+<Note>
+When viewing activity for a contact, OptiFlow includes transactions from all related contacts, providing a complete family or business unit view.
+</Note>
+
+## Activity Tracking
+
+### Transaction History
+
+```php
+// Get contact activity (app/Http/Controllers/ContactController.php:95)
+$contactIds = $contact->relatedContactIdsWithSelf();
+
+// Get invoices (including related contacts)
+$invoices = Invoice::whereIn('contact_id', $contactIds)
+    ->with(['documentSubtype', 'contact'])
+    ->orderByDesc('issue_date')
+    ->limit(10)
+    ->get();
+
+// Get quotations
+$quotations = Quotation::whereIn('contact_id', $contactIds)
+    ->with(['documentSubtype', 'contact'])
+    ->orderByDesc('issue_date')
+    ->limit(10)
+    ->get();
+
+// Get prescriptions (optical businesses)
+$prescriptions = $contact->prescriptions()
+    ->with(['optometrist'])
+    ->orderByDesc('created_at')
+    ->limit(10)
+    ->get();
+```
+
+### Financial Summary
+
+```php
+// Calculate contact statistics
+$stats = [
+    'total_invoices' => Invoice::whereIn('contact_id', $contactIds)->count(),
+    'total_invoiced' => Invoice::whereIn('contact_id', $contactIds)->sum('total_amount'),
+    'total_paid' => Invoice::whereIn('contact_id', $contactIds)
+        ->whereIn('status', ['paid', 'partially_paid'])
+        ->get()
+        ->sum(fn($inv) => $inv->total_amount - $inv->amount_due),
+    'pending_amount' => Invoice::whereIn('contact_id', $contactIds)
+        ->whereNotIn('status', ['paid', 'cancelled'])
+        ->sum('total_amount'),
+];
+```
+
+## Comments & Notes
+
+Add internal comments to contacts:
+
+```php
+// Contacts support comments (app/Models/Contact.php:91)
+$comment = $contact->comments()->create([
+    'body' => 'Customer prefers morning delivery',
+    'commentator_id' => auth()->id(),
+]);
+
+// Get all comments
+$comments = $contact->comments;
+
+// Comments support nested replies
+$reply = $comment->comments()->create([
+    'body' => 'Noted for next order',
+    'commentator_id' => auth()->id(),
+]);
+```
+
+## Contact Search
+
+Use the ContactSearch helper for efficient lookups:
+
+```php
+use App\Support\ContactSearch;
+
+$search = app(ContactSearch::class);
+
+// Search active contacts
+$results = $search->searchActive('john smith');
+
+// Search customers only
+$customers = $search->searchCustomers('acme');
+
+// Find customer by ID
+$customer = $search->findCustomerById($customerId);
+
+// Convert to select option format
+$option = $search->toOption($contact);
+```
+
+## Bulk Import
+
+Import contacts from CSV files:
+
+```php
+// Using ContactImportController
+use App\Http\Controllers\ProcessContactImportController;
+
+// Upload CSV file
+$import = ContactImport::create([
+    'workspace_id' => $workspace->id,
+    'file_path' => $filePath,
+    'user_id' => auth()->id(),
+]);
+
+// Process import
+ProcessContactImportAction::handle($import);
+
+// Import includes:
+// - Duplicate detection
+// - Data validation
+// - Error reporting
+// - Progress tracking
+```
+
+### Duplicate Detection
+
+```php
+// Check for duplicate contacts
+use App\Http\Controllers\CheckContactDuplicatesController;
+
+// Detects duplicates based on:
+// - Name similarity
+// - Email match
+// - Phone number match
+// - Identification number
+```
+
+## Querying Contacts
+
+### By Type
+
+```php
+// Get customers only
+$customers = Contact::customers()->get();
+
+// Get suppliers only
+$suppliers = Contact::suppliers()->get();
+
+// Get optometrists
+$optometrists = Contact::optometrists()->get();
+
+// By specific type
+$contacts = Contact::ofType(ContactType::Customer->value)->get();
+```
+
+### By Status
+
+```php
+// Active contacts only
+$active = Contact::where('status', 'active')->get();
+
+// Check if active
+if ($contact->isActive()) {
+    // Contact is active
+}
+```
+
+### By Workspace
+
+```php
+// Contacts in current workspace (automatic)
+$contacts = Contact::all();
+
+// Contacts in specific workspace
+$contacts = Contact::forWorkspace($workspace)->get();
+
+// All contacts (admin only)
+$allContacts = Contact::withoutWorkspaceScope()->get();
+```
+
+## Use Cases
+
+<AccordionGroup>
+  <Accordion title="Customer Management">
+    Track customer information, purchase history, outstanding balances, and credit limits for retail or B2B sales.
+  </Accordion>
+  
+  <Accordion title="Supplier Database">
+    Maintain supplier contact information, track which products they supply, and manage purchasing relationships.
+  </Accordion>
+  
+  <Accordion title="Family Accounts">
+    Link family members together to share invoices, prescriptions, and payment history for optical or healthcare businesses.
+  </Accordion>
+  
+  <Accordion title="Professional Network">
+    Manage relationships with optometrists, referral sources, and other professional contacts.
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<CardGroup cols={1}>
+  <Card title="Complete Information">
+    Fill in as much contact information as possible for better customer service and communication.
+  </Card>
+  
+  <Card title="Regular Updates">
+    Keep contact information current by updating addresses, phone numbers, and email addresses when customers notify you of changes.
+  </Card>
+  
+  <Card title="Use Relationships">
+    Link related contacts to provide better service and see complete family or business unit activity.
+  </Card>
+  
+  <Card title="Credit Limits">
+    Set appropriate credit limits for customers to manage risk and automate credit approval.
+  </Card>
+</CardGroup>
+
+## API Reference
+
+Key contact model methods:
+
+- `isCustomer()` - Check if contact is a customer
+- `isSupplier()` - Check if contact is a supplier
+- `isActive()` - Check if contact is active
+- `relatedContactIdsWithSelf()` - Get IDs including relationships
+- `addresses()` - Relationship to Address records
+- `primaryAddress()` - Get primary address
+- `relationships()` - Relationship to related contacts
+- `invoices()` - Relationship to Invoice records
+- `quotations()` - Relationship to Quotation records
+- `suppliedStocks()` - Relationship to supplied ProductStock
+- `prescriptions()` - Relationship to Prescription records
+- `comments()` - Relationship to Comment records
+
+Model location: `app/Models/Contact.php:1`
+
+Controller location: `app/Http/Controllers/ContactController.php:1`
+
+## Related Resources
+
+- [Invoicing](/features/invoicing)
+- [Quotations](/features/quotations)
+- [Multi-Workspace](/features/multi-workspace)
+- [Import Guide](/guides/contact-management)

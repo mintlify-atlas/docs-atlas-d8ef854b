@@ -1,0 +1,649 @@
+---
+title: Contact Management
+description: Complete guide to managing customers, suppliers, and contact relationships in OptiFlow
+---
+
+Contacts are central to OptiFlow, representing customers, suppliers, and other business relationships. Proper contact management ensures smooth invoicing, quotations, and reporting.
+
+## Overview
+
+Contact management features:
+- Unified customer and supplier database
+- Multiple contact types (customer, supplier, both)
+- Contact relationships (family members, business partners)
+- Comprehensive contact information (addresses, IDs, phones, emails)
+- Activity history (invoices, quotations, payments)
+- Bulk import from Excel/CSV
+- Duplicate detection
+
+## Contact Types
+
+OptiFlow supports different contact classifications:
+
+| Type | Code | Usage |
+|------|------|-------|
+| Customer | `customer` | Entities you sell to |
+| Supplier | `supplier` | Entities you buy from |
+| Both | `both` | Entities you both buy from and sell to |
+
+Reference: `ContactType` enum in `app/Enums/ContactType.php`
+
+## Creating a Contact
+
+<Steps>
+
+<Step title="Navigate to Contacts">
+Go to **Contacts** → **Create Contact**
+
+Reference: `ContactController::create()` in `app/Http/Controllers/ContactController.php:42`
+
+Requires `contacts:create` permission.
+</Step>
+
+<Step title="Enter Basic Information">
+
+**Required Fields**:
+- **Name**: Contact's full name or business name
+- **Contact Type**: Customer, Supplier, or Both
+
+**Optional Fields**:
+- **Commercial Name**: Trading name (if different from legal name)
+- **Email**: Primary email address
+- **Phone**: Primary phone number
+- **Mobile**: Mobile phone number
+- **Website**: Company website
+
+```php
+// Available contact types loaded in the form
+'contact_types' => collect(ContactType::cases())
+    ->map(fn ($type) => [
+        'value' => $type->value,
+        'label' => $type->label(),
+    ]);
+```
+</Step>
+
+<Step title="Add Identification">
+
+Configure identification documents:
+
+**Identification Type**: Select from:
+- RNC (Registro Nacional de Contribuyentes) - Tax ID
+- Cédula - National ID card
+- Pasaporte - Passport
+- Other identification types
+
+**Identification Number**: Enter the ID number
+
+<Note>
+For Dominican Republic businesses, RNC is mandatory for proper tax compliance and invoice generation.
+</Note>
+
+Reference: `IdentificationType` enum defines available ID types
+
+```php
+'identification_types' => collect(IdentificationType::cases())
+    ->map(fn ($type) => [
+        'value' => $type->value,
+        'label' => $type->label(),
+    ]);
+```
+</Step>
+
+<Step title="Add Address Information">
+
+**Primary Address** (Optional but recommended):
+- Street address
+- City
+- State/Province
+- Postal code
+- Country
+
+The primary address is used for:
+- Invoice billing address
+- Delivery address (default)
+- Correspondence
+
+<Tip>
+You can add multiple addresses per contact. The first address created becomes the primary address.
+</Tip>
+</Step>
+
+<Step title="Configure Relationships">
+
+Link this contact to related contacts:
+
+**Use Cases**:
+- Family members (parent, child, spouse)
+- Business partners
+- Subsidiaries
+- Alternative contacts
+
+**To Add Relationship**:
+1. Search for existing contact
+2. Select relationship type or add description
+3. Add to relationships list
+
+**Benefits**:
+- View consolidated activity across related contacts
+- Track family/group purchasing patterns
+- Share notes and history
+
+Reference: Contact relationships are many-to-many with descriptions
+
+```php
+// From ContactController::show()
+$contactIds = $contact->relatedContactIdsWithSelf();
+
+// Invoices query includes related contacts
+$invoices = Invoice::query()
+    ->whereIn('contact_id', $contactIds)
+    ->get();
+```
+</Step>
+
+<Step title="Save Contact">
+Click **Create Contact**
+
+The system:
+1. Validates required fields
+2. Checks for potential duplicates (optional)
+3. Creates contact record
+4. Creates primary address (if provided)
+5. Establishes relationships
+6. Redirects to contact detail page
+
+Reference: `CreateContactAction::handle()` in `app/Actions/CreateContactAction.php`
+</Step>
+
+</Steps>
+
+## Contact Information Fields
+
+### Complete Field List
+
+**Identity**:
+- Name (required)
+- Commercial name
+- Identification type
+- Identification number
+
+**Communication**:
+- Email
+- Phone
+- Mobile
+- Website
+
+**Classification**:
+- Contact type (Customer/Supplier/Both)
+- Tags or categories (if configured)
+
+**Address**:
+- Multiple addresses supported
+- Primary address designation
+- Full address components
+
+**Relationships**:
+- Related contacts with descriptions
+- Bidirectional relationships
+
+**Financial**:
+- Credit limit (optional)
+- Payment terms preference
+- Tax classification
+
+## Viewing Contact Details
+
+<Steps>
+
+<Step title="Navigate to Contact">
+Go to **Contacts** → Select a contact from the list
+
+Reference: `ContactController::show()` in `app/Http/Controllers/ContactController.php:82`
+</Step>
+
+<Step title="Overview Tab">
+View contact summary:
+- Basic information
+- Primary address
+- Recent activity
+- Quick statistics
+
+**Statistics Shown**:
+```php
+$stats = [
+    'total_invoices' => (clone $invoiceQuery)->count(),
+    'total_quotations' => (clone $quotationQuery)->count(),
+    'total_invoiced' => (clone $invoiceQuery)->sum('total_amount'),
+    'total_paid' => /* sum of payments */,
+    'pending_amount' => /* outstanding balance */,
+];
+```
+</Step>
+
+<Step title="Invoices Tab">
+View all invoices for this contact:
+- Invoice number and date
+- Total amount
+- Status (Paid, Pending, Overdue)
+- Payment status
+- Quick actions (view, download PDF)
+
+Limited to 10 most recent, with link to see all.
+</Step>
+
+<Step title="Quotations Tab">
+View all quotations:
+- Quotation number and date
+- Status (Pending, Approved, Converted)
+- Total quoted amount
+- Actions (view, convert to invoice)
+</Step>
+
+<Step title="Activity Tab">
+Complete activity log:
+- Contact changes
+- Invoice created/paid
+- Quotations sent
+- Payments received
+- Notes added
+- User who performed action
+- Timestamp
+</Step>
+
+<Step title="Comments Tab">
+Internal notes and comments:
+- Add notes about the contact
+- Communication history
+- Special instructions
+- Threaded discussions
+
+Reference: `Contact` implements `Commentable` interface using `HasComments` trait
+</Step>
+
+</Steps>
+
+## Editing Contacts
+
+<Steps>
+
+<Step title="Open Contact Editor">
+From contact detail page, click **Edit Contact**
+
+Reference: `ContactController::edit()` in `app/Http/Controllers/ContactController.php:170`
+
+Requires `contacts:edit` permission.
+</Step>
+
+<Step title="Modify Information">
+Update any contact fields:
+- Basic information
+- Contact type
+- Identification
+- Addresses
+- Relationships
+
+<Warning>
+Changing a contact's identification number may affect tax reporting and compliance. Ensure the change is legitimate and properly documented.
+</Warning>
+</Step>
+
+<Step title="Save Changes">
+Click **Update Contact**
+
+Changes are tracked in the activity log with:
+- Fields changed
+- Old and new values
+- User who made the change
+- Timestamp
+
+Reference: `UpdateContactAction::handle()`
+</Step>
+
+</Steps>
+
+## Contact Relationships
+
+### Setting Up Relationships
+
+Contact relationships allow linking related individuals or businesses:
+
+**Relationship Types** (custom descriptions):
+- "Parent" / "Child"
+- "Spouse"
+- "Business Partner"
+- "Subsidiary"
+- "Primary Contact" / "Alternative Contact"
+- "Referral Source"
+
+### Benefits of Relationships
+
+1. **Consolidated Reporting**: View all invoices and quotations for a family or group
+2. **Shared History**: See complete interaction history
+3. **Cross-References**: Easy navigation between related contacts
+
+### Adding Relationships
+
+<Steps>
+
+<Step title="Edit Contact">
+Navigate to contact and click **Edit**
+</Step>
+
+<Step title="Search for Related Contact">
+Use the relationship search field:
+- Type contact name or ID
+- Select from results
+- Contact cannot be related to itself
+
+```php
+// Search excludes the current contact
+$contactSearch->searchActive(
+    (string) $request->string('relationship_search'),
+    $contact->id  // Exclude this contact from results
+);
+```
+</Step>
+
+<Step title="Add Description">
+Describe the relationship:
+- "Mother of [contact]"
+- "Alternative phone for [contact]"
+- "Partner"
+</Step>
+
+<Step title="Save">
+Relationship is bidirectional - appears on both contacts
+</Step>
+
+</Steps>
+
+## Importing Contacts
+
+Bulk import contacts from Excel or CSV files.
+
+<Steps>
+
+<Step title="Navigate to Import">
+Go to **Contacts** → **Import Contacts**
+
+Reference: `ContactImportController` in `app/Http/Controllers/ContactImportController.php`
+</Step>
+
+<Step title="Upload File">
+Supported formats:
+- Excel (.xlsx, .xls)
+- CSV (.csv)
+
+Requirements:
+- First row should contain headers
+- At minimum, include contact names
+
+Reference: `CreateContactImportAction` parses file using `ParseExcelFileAction` or `ParseCsvFileAction`
+</Step>
+
+<Step title="Map Columns">
+Map your file columns to OptiFlow contact fields:
+
+**Your File Column** → **OptiFlow Field**
+- "Customer Name" → Name
+- "Tax ID" → Identification Number
+- "Email Address" → Email
+- etc.
+
+Available fields from `ContactImport::getAvailableFields()`:
+- name
+- commercial_name
+- email
+- phone
+- mobile
+- identification_type
+- identification_number
+- contact_type
+- address
+- city
+- state
+- postal_code
+- country
+
+```php
+// Preview data shown for verification
+'previewData' => array_slice($contactImport->import_data ?? [], 0, 5)
+```
+</Step>
+
+<Step title="Validate Data">
+Review validation results:
+- ✅ Valid rows (will be imported)
+- ⚠️ Warnings (will import with caution)
+- ❌ Errors (will be skipped)
+
+Common issues:
+- Missing required fields (name)
+- Invalid email formats
+- Duplicate identification numbers
+
+Reference: `ValidateContactImportDataAction`
+</Step>
+
+<Step title="Process Import">
+Click **Import Contacts**
+
+System processes:
+1. Validates each row
+2. Checks for duplicates
+3. Creates contact records
+4. Creates addresses
+5. Generates import summary
+
+Reference: `ProcessContactImportAction::handle()`
+</Step>
+
+<Step title="Review Results">
+Import summary shows:
+- Total rows processed
+- Successfully imported
+- Skipped (with reasons)
+- Duplicates detected
+- Link to imported contacts
+</Step>
+
+</Steps>
+
+### Duplicate Detection
+
+When importing, the system checks for duplicates based on:
+- Identification number (if provided)
+- Email address
+- Exact name match
+
+Duplicate handling options:
+- Skip duplicates
+- Update existing contacts
+- Create anyway (with warning)
+
+Reference: `CheckContactDuplicatesController` provides duplicate checking
+
+## Contact Search
+
+Efficient contact search throughout OptiFlow:
+
+### Search Locations
+
+1. **Contact List Page**: Full-text search with filters
+2. **Invoice/Quotation Creation**: Customer search dropdown
+3. **Quick Search**: Global search bar
+
+### Search Criteria
+
+Contacts can be found by:
+- Name (partial match)
+- Commercial name
+- Identification number
+- Email
+- Phone number
+
+```php
+// ContactSearch::searchCustomers() implementation
+public function searchCustomers(string $query): array
+{
+    return Contact::query()
+        ->where(function ($q) use ($query) {
+            $q->where('name', 'like', "%{$query}%")
+              ->orWhere('identification_number', 'like', "%{$query}%")
+              ->orWhere('email', 'like', "%{$query}%")
+              ->orWhere('phone', 'like', "%{$query}%");
+        })
+        ->whereIn('type', ['customer', 'both'])
+        ->limit(20)
+        ->get()
+        ->map(fn ($contact) => $this->toOption($contact))
+        ->toArray();
+}
+```
+
+### Search Filters
+
+On contact list page:
+- Contact type (Customer/Supplier/Both)
+- Active/Inactive status
+- Tags or categories
+- Date created
+
+## Deleting Contacts
+
+<Steps>
+
+<Step title="Navigate to Contact">
+Open the contact you want to delete
+</Step>
+
+<Step title="Click Delete">
+Click **Delete Contact** button
+
+Reference: `ContactController::destroy()` - requires `contacts:delete` permission
+</Step>
+
+<Step title="Confirm Deletion">
+System checks if contact can be deleted:
+
+**Cannot delete if**:
+- Contact has invoices
+- Contact has quotations  
+- Contact has payments
+- Contact has other related records
+
+**Solution for contacts with records**:
+- Mark as inactive instead of deleting
+- Or remove as a "soft delete" (if configured)
+
+Reference: `DeleteContactAction::handle()`
+</Step>
+
+</Steps>
+
+<Warning>
+Deleting contacts is permanent and cannot be undone. For contacts with transaction history, consider marking them as inactive instead.
+</Warning>
+
+## Best Practices
+
+<Tip>
+**Complete Contact Information**: Fill in as much information as possible. Complete contact records improve reporting and customer service.
+</Tip>
+
+<Tip>
+**Use Relationships**: Link family members and related businesses to track group purchasing and provide better service.
+</Tip>
+
+<Tip>
+**Regular Cleanup**: Periodically review and merge duplicate contacts, update outdated information.
+</Tip>
+
+<Tip>
+**Categorize Contacts**: Use consistent contact types and tags for better segmentation and reporting.
+</Tip>
+
+<Tip>
+**Document Interactions**: Use comments to record important customer conversations, preferences, and special instructions.
+</Tip>
+
+## Common Scenarios
+
+### Scenario: Family Group Management
+
+**Situation**: Optometry clinic with family patients
+
+<Steps>
+<Step title="Create Primary Contact">
+Create contact for head of household
+</Step>
+
+<Step title="Create Family Members">
+Create individual contacts for spouse and children
+</Step>
+
+<Step title="Link Relationships">
+Add relationships:
+- Spouse relationship
+- Parent-child relationships
+</Step>
+
+<Step title="View Consolidated">
+From any family member, view complete family history of invoices and quotations
+</Step>
+</Steps>
+
+### Scenario: Corporate Account
+
+**Situation**: Business with multiple departments or contacts
+
+<Steps>
+<Step title="Create Company Contact">
+Main business entity with RNC
+</Step>
+
+<Step title="Create Department Contacts">
+Individual contacts for departments (if needed)
+</Step>
+
+<Step title="Link as Subsidiaries">
+Relationship: "Department of [Company]"
+</Step>
+</Steps>
+
+## Troubleshooting
+
+### Cannot Create Contact - Duplicate Error
+
+**Problem**: "A contact with this identification number already exists"
+
+**Solution**:
+1. Search for existing contact
+2. Update existing contact instead
+3. Or use different identification type if legitimately different entity
+
+### Contact Not Appearing in Search
+
+**Problem**: Contact exists but doesn't show in invoice customer search
+
+**Cause**: Contact type is set to "Supplier" only
+
+**Solution**:
+1. Edit the contact
+2. Change type to "Customer" or "Both"
+
+### Related Invoices Not Showing
+
+**Problem**: Invoice was created but doesn't appear on contact detail page
+
+**Investigation**:
+1. Check if invoice was created for a related contact instead
+2. Verify invoice is in the current workspace
+
+## Related Features
+
+- [Creating Invoices](/guides/creating-invoices)
+- [Quotations to Invoices](/guides/quotations-to-invoices)
+- [Contact API Reference](/api/contacts)
+- [Import API Reference](/api/contacts)

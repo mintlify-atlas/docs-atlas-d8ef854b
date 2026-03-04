@@ -1,0 +1,406 @@
+---
+title: Building Automations
+description: Create event-driven automations with the visual automation builder in OptiFlow
+---
+
+## Introduction
+
+OptiFlow's automation builder allows you to create sophisticated, event-driven workflows using a visual drag-and-drop interface. Automations respond to triggers and execute actions automatically, eliminating repetitive manual tasks.
+
+## Automation Builder Interface
+
+The automation builder (`resources/js/components/automations/automation-builder.tsx`) provides a powerful node-based canvas:
+
+- **Canvas**: Drag nodes, create connections, and visualize your automation flow
+- **Node Catalog**: Browse available triggers, actions, and conditions
+- **Node Inspector**: Configure selected nodes with specific settings
+- **Undo/Redo**: Full history management with keyboard shortcuts (Cmd/Ctrl+Z)
+- **Copy/Paste**: Duplicate node groups (Cmd/Ctrl+C, Cmd/Ctrl+V)
+
+<Info>
+The builder uses ReactFlow under the hood, providing smooth interactions, minimap navigation, and zoom controls.
+</Info>
+
+## Creating an Automation
+
+<Steps>
+  <Step title="Access the Automation Builder">
+    Navigate to the automations section and click "Create Automation".
+  </Step>
+  
+  <Step title="Configure the Trigger">
+    Every automation starts with a trigger node. Select the event that will start your automation:
+    
+    - **Workflow Stage Entered**: When a job moves to a specific workflow stage
+    - **Invoice Created**: When a new invoice is created
+    - **Invoice Updated**: When an invoice is modified
+  </Step>
+  
+  <Step title="Add Action Nodes">
+    Click "Add Node" to open the node catalog. Choose from available actions:
+    
+    - **WhatsApp Message**: Send messages to customers
+    - **Telegram Message**: Notify staff members
+    - **Webhook**: Call external APIs
+    - **Condition**: Add conditional logic
+  </Step>
+  
+  <Step title="Connect Nodes">
+    Drag from a node's output handle to another node's input handle to create connections. These define the execution flow.
+  </Step>
+  
+  <Step title="Configure Node Settings">
+    Select each node to configure its specific settings in the inspector panel on the right.
+  </Step>
+  
+  <Step title="Save and Activate">
+    Give your automation a name, toggle the "Active" checkbox, and click "Save".
+  </Step>
+</Steps>
+
+## Automation Triggers
+
+Triggers define when your automation runs. They are configured in the `AutomationTrigger` model.
+
+### Workflow Stage Entered Trigger
+
+This is the most common trigger for optical stores. It fires when a workflow job enters a specific stage.
+
+**Configuration**:
+```php
+[
+  'workflow_id' => 'uuid-of-workflow',
+  'stage_id' => 'uuid-of-stage',
+]
+```
+
+**Example Use Cases**:
+- Send WhatsApp when order reaches "Ready for Pickup"
+- Notify optician when job enters "Quality Check"
+- Create invoice when job reaches "Completed"
+
+### Invoice Triggers
+
+**Invoice Created**: Fires when a new invoice is created
+**Invoice Updated**: Fires when an invoice is modified
+
+These triggers have access to invoice data including totals, line items, and associated contacts.
+
+<Note>
+Triggers are stored in the `automation_triggers` table and linked to specific automations via `automation_id`.
+</Note>
+
+## Action Nodes
+
+### WhatsApp Message Node
+
+Send automated WhatsApp messages to customers using connected WhatsApp Business accounts.
+
+**Configuration**:
+- **WhatsApp Account**: Select from configured accounts
+- **Recipient**: Use template variables like `{{contact.number}}`
+- **Message Template**: Craft your message with dynamic variables
+
+**Example Message**:
+```
+Hola {{contact.name}},
+
+Tu orden #{{job.id}} está lista para recoger.
+Total: {{invoice.total_amount}}
+
+¡Te esperamos!
+```
+
+### Telegram Message Node
+
+Send notifications to Telegram chats for internal staff communication.
+
+**Configuration**:
+- **Telegram Bot**: Select from configured bots
+- **Chat ID**: Specify the destination chat
+- **Message**: Use template variables
+
+**Example Message**:
+```
+🔔 Nuevo trabajo en {{to_stage.name}}
+
+Cliente: {{contact.name}}
+Prioridad: {{job.priority}}
+Vence: {{job.due_date}}
+
+Asignado por: {{actor.name}}
+```
+
+### Webhook Node
+
+Call external APIs to integrate with third-party systems.
+
+**Configuration**:
+- **URL**: Endpoint to call
+- **Method**: GET, POST, PUT, DELETE
+- **Headers**: Custom HTTP headers
+- **Body**: JSON payload with template variables
+
+### Condition Node
+
+Add conditional logic to create branching automations.
+
+**Configuration**:
+- **Field**: Select workflow field or context variable
+- **Operator**: Equals, contains, greater than, etc.
+- **Value**: Comparison value
+
+<Tip>
+Condition nodes enable sophisticated automations like "Send WhatsApp only if invoice total is greater than $500".
+</Tip>
+
+## Template Variables
+
+Template variables allow you to insert dynamic data into your messages and webhooks. The `AutomationController` provides these variables:
+
+| Variable | Description | Example |
+|----------|-------------|----------|
+| `{{contact.name}}` | Customer name | "Juan Pérez" |
+| `{{contact.number}}` | Customer phone | "+1234567890" |
+| `{{contact.email}}` | Customer email | "juan@example.com" |
+| `{{invoice.number}}` | Invoice number | "INV-001" |
+| `{{invoice.total_amount}}` | Invoice total | "$250.00" |
+| `{{job.id}}` | Job UUID | "9a3f..." |
+| `{{job.priority}}` | Job priority | "high" |
+| `{{job.due_date}}` | Due date | "2026-03-15" |
+| `{{to_stage.name}}` | Destination stage | "Ready for Pickup" |
+| `{{from_stage.name}}` | Previous stage | "In Progress" |
+| `{{actor.name}}` | User who triggered | "María García" |
+
+<Warning>
+Template variables are replaced server-side by the `AutomationContext` class. Invalid variables will be replaced with empty strings.
+</Warning>
+
+## Testing Automations
+
+Before activating an automation, test it to ensure it works as expected.
+
+### Test Run Controller
+
+The `AutomationTestRunController` allows you to execute automations with sample data:
+
+```php
+// app/Http/Controllers/AutomationTestRunController.php
+// Provides test execution with mock context
+```
+
+**Testing Process**:
+1. Select an automation to test
+2. Provide sample data (contact, invoice, job details)
+3. Execute the test run
+4. Review the results and node outputs
+
+### Test Data Controller
+
+The `AutomationTestDataController` generates realistic test data:
+
+```php
+// Generates sample contacts, invoices, and jobs
+// Useful for testing automations without affecting real data
+```
+
+<Info>
+Test runs create `AutomationRun` records with a test flag, so they don't interfere with production automation metrics.
+</Info>
+
+## Automation Runs and History
+
+Every time an automation executes, it creates an `AutomationRun` record.
+
+### AutomationRun Model
+
+```php
+// app/Models/AutomationRun.php
+final class AutomationRun extends Model
+{
+    // Properties:
+    // - automation_id: Which automation ran
+    // - automation_version_id: Version of the automation
+    // - trigger_event_key: What triggered it
+    // - subject_type: 'workflow_job' or 'invoice'
+    // - subject_id: ID of the triggering entity
+    // - status: 'running', 'completed', 'failed'
+    // - pending_nodes: Number of nodes still executing
+    // - started_at: When execution began
+    // - finished_at: When execution completed
+    // - error: Error message if failed
+}
+```
+
+### Node Run Tracking
+
+Each node execution is tracked in `AutomationNodeRun`:
+
+- **Node ID**: Which node executed
+- **Status**: pending, running, completed, failed, skipped
+- **Input**: Data passed to the node
+- **Output**: Result from the node
+- **Error**: Error details if failed
+- **Started/Finished**: Execution timestamps
+
+### Viewing Run History
+
+The `AutomationRunController` provides views to:
+- List all runs for an automation
+- View detailed run results
+- See individual node execution details
+- Debug failed automations
+
+<Note>
+Automation runs are retained for audit purposes. You can see exactly when automations fired, what data they processed, and whether they succeeded.
+</Note>
+
+## Automation Versioning
+
+Automations support versioning via the `AutomationVersion` model.
+
+**How It Works**:
+1. When you save an automation, a new version is created
+2. The version stores the complete node and edge definition
+3. Active automations reference a `published_version`
+4. You can roll back to previous versions if needed
+
+**Version Fields**:
+```php
+[
+  'automation_id' => 'parent-automation-uuid',
+  'version' => 1, // Incremental version number
+  'definition' => [ // Complete automation definition
+    'nodes' => [...],
+    'edges' => [...],
+  ],
+]
+```
+
+<Tip>
+Versioning allows you to safely update automations. If a new version causes issues, you can quickly roll back to a known-good version.
+</Tip>
+
+## Real-World Example
+
+Here's a complete automation for an optical store:
+
+**Scenario**: Notify customers when their prescription eyewear is ready for pickup.
+
+<Steps>
+  <Step title="Trigger">
+    **Workflow Stage Entered**
+    - Workflow: "Prescription Eyewear Orders"
+    - Stage: "Ready for Pickup"
+  </Step>
+  
+  <Step title="Condition">
+    **Check if contact has phone number**
+    - Field: `contact.number`
+    - Operator: "is not empty"
+  </Step>
+  
+  <Step title="WhatsApp Message">
+    **Send pickup notification**
+    
+    Message:
+    ```
+    Hola {{contact.name}},
+    
+    ¡Buenas noticias! Tu orden está lista para recoger.
+    
+    📋 Orden: #{{job.id}}
+    💰 Total: {{invoice.total_amount}}
+    
+    Visítanos en nuestro horario de atención.
+    
+    ¡Gracias por tu preferencia!
+    ```
+  </Step>
+  
+  <Step title="Telegram Notification">
+    **Notify staff**
+    
+    Message:
+    ```
+    📦 Orden lista para entrega
+    
+    Cliente: {{contact.name}}
+    Orden: #{{job.id}}
+    Total: {{invoice.total_amount}}
+    
+    Preparado por: {{actor.name}}
+    ```
+  </Step>
+</Steps>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Start Simple">
+    Begin with single-action automations (one trigger → one action). Add complexity gradually as you become comfortable.
+  </Accordion>
+  
+  <Accordion title="Use Descriptive Names">
+    Name automations clearly: "Send WhatsApp - Order Ready" instead of "Automation 1".
+  </Accordion>
+  
+  <Accordion title="Test Before Activating">
+    Always test automations with sample data before activating them for production use.
+  </Accordion>
+  
+  <Accordion title="Monitor Run History">
+    Regularly check automation runs to ensure they're executing as expected and troubleshoot any failures.
+  </Accordion>
+  
+  <Accordion title="Use Template Variables Wisely">
+    Always have fallback text for optional variables. Example: `{{contact.name}}` or "Cliente".
+  </Accordion>
+  
+  <Accordion title="Handle Errors Gracefully">
+    Design automations to degrade gracefully. If WhatsApp fails, consider having a fallback notification method.
+  </Accordion>
+</AccordionGroup>
+
+## Keyboard Shortcuts
+
+The automation builder supports these keyboard shortcuts:
+
+| Shortcut | Action |
+|----------|--------|
+| `Cmd/Ctrl + Z` | Undo |
+| `Cmd/Ctrl + Shift + Z` | Redo |
+| `Cmd/Ctrl + Y` | Redo |
+| `Cmd/Ctrl + C` | Copy selected nodes |
+| `Cmd/Ctrl + V` | Paste nodes |
+| `Delete/Backspace` | Delete selected nodes |
+
+<Warning>
+Keyboard shortcuts are disabled when focus is inside text inputs to prevent accidental actions while typing.
+</Warning>
+
+## Advanced Features
+
+### Copy and Paste Nodes
+
+Select one or more nodes and press `Cmd/Ctrl + C` to copy them. Press `Cmd/Ctrl + V` to paste with a slight offset. This is useful for creating similar action chains.
+
+### Undo/Redo History
+
+The builder maintains up to 100 snapshots of your automation state. Use undo/redo to experiment without fear of losing your work.
+
+### Node Selection and Multi-Select
+
+Click nodes to select them individually. Hold Shift and click to select multiple nodes. Selected nodes can be moved together or deleted as a group.
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Workflows Overview" icon="diagram-project" href="/workflows/overview">
+    Learn about workflows and how they integrate with automations
+  </Card>
+  
+  <Card title="Prescription Management" icon="file-prescription" href="/workflows/prescriptions">
+    Link prescriptions to workflow jobs and automations
+  </Card>
+</CardGroup>

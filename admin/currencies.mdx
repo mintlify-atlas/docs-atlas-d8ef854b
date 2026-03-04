@@ -1,0 +1,416 @@
+---
+title: Multi-Currency Configuration
+description: Setting up and managing multiple currencies with exchange rates
+---
+
+OptiFlow supports multi-currency operations, allowing you to manage transactions in different currencies with automatic conversion based on exchange rates. This is essential for businesses dealing with international suppliers or customers.
+
+## Currency System Overview
+
+The currency system consists of:
+
+- **Currencies**: Supported currency definitions (code, symbol, name)
+- **Exchange Rates**: Historical exchange rates with effective dates
+- **Default Currency**: The base currency for your business (typically DOP for Dominican Republic)
+
+## Currency Model
+
+The `Currency` model (`app/Models/Currency.php:41`) contains:
+
+```php
+$currency->code;        // ISO 4217 code (e.g., "USD", "EUR", "DOP")
+$currency->name;        // Full name (e.g., "US Dollar")
+$currency->symbol;      // Currency symbol (e.g., "$", "€", "RD$")
+$currency->is_default;  // Whether this is the default currency
+$currency->is_active;   // Whether this currency is active
+```
+
+### Common Currencies
+
+| Code | Name | Symbol |
+|------|------|--------|
+| DOP | Dominican Peso | RD$ |
+| USD | US Dollar | $ |
+| EUR | Euro | € |
+
+## Setting Up Currencies
+
+### Creating a Currency
+
+Use the `CurrencyController` (`app/Http/Controllers/CurrencyController.php:18`) or the action:
+
+<Steps>
+  <Step title="Navigate to Currencies">
+    Access the currencies management page:
+    ```
+    GET /currencies
+    ```
+  </Step>
+  
+  <Step title="Create New Currency">
+    Click "Create" and provide:
+    - Currency code (3-letter ISO code)
+    - Full name
+    - Symbol
+    - Whether it's active
+  </Step>
+  
+  <Step title="Set Exchange Rate">
+    After creating the currency, add an initial exchange rate
+  </Step>
+</Steps>
+
+### Using CreateCurrencyAction
+
+```php
+use App\Actions\CreateCurrencyAction;
+
+$action = new CreateCurrencyAction();
+$action->handle([
+    'code' => 'USD',
+    'name' => 'US Dollar',
+    'symbol' => '$',
+    'is_active' => true,
+    'is_default' => false,
+]);
+```
+
+### Setting the Default Currency
+
+Only one currency can be the default:
+
+```php
+// When creating/updating, setting is_default = true
+// automatically unsets other currencies as default
+$usd = Currency::where('code', 'USD')->first();
+$usd->is_default = true;
+$usd->save();
+// All other currencies will have is_default = false
+```
+
+<Note>
+The default currency always has an exchange rate of 1.0. All other currencies are converted relative to the default currency.
+</Note>
+
+## Exchange Rates
+
+### Exchange Rate Model
+
+The `CurrencyRate` model stores historical exchange rates:
+
+```php
+$rate->currency_id;     // Foreign key to currency
+$rate->rate;            // Exchange rate (e.g., 56.5 DOP per USD)
+$rate->effective_date;  // When this rate becomes effective
+```
+
+### Creating Exchange Rates
+
+```php
+use App\Actions\CreateCurrencyRateAction;
+use Carbon\Carbon;
+
+$action = new CreateCurrencyRateAction();
+$action->handle($currency, [
+    'rate' => 56.50,
+    'effective_date' => Carbon::now()->format('Y-m-d'),
+]);
+```
+
+### How Rates Work
+
+Exchange rates represent how much of the **default currency** equals 1 unit of the foreign currency:
+
+```
+If default currency is DOP and foreign currency is USD:
+Rate = 56.5 means 1 USD = 56.5 DOP
+
+To convert USD to DOP: USD × rate
+To convert DOP to USD: DOP ÷ rate
+```
+
+### Historical Rates
+
+Rates are date-effective, allowing you to:
+
+- Track rate changes over time
+- Use historical rates for past transactions
+- Calculate currency variations
+
+```php
+// Get rate for specific date
+$rate = $currency->getRateForDate(Carbon::parse('2024-01-15'));
+
+// Get current rate
+$currentRate = $currency->getCurrentRate();
+```
+
+<Warning>
+Always use the transaction date when converting currencies for invoices to ensure accurate historical records.
+</Warning>
+
+## Currency Selection in Transactions
+
+When creating invoices or other transactions:
+
+### Selecting Currency
+
+```php
+use App\Models\Currency;
+use App\Models\Invoice;
+
+// Get active currencies for selection
+$currencies = Currency::active()->get();
+
+// Create invoice with specific currency
+$invoice = new Invoice();
+$invoice->currency_id = $usd->id;
+$invoice->amount = 1000; // Amount in USD
+$invoice->save();
+```
+
+### Storing Both Amounts
+
+Best practice is to store both original and converted amounts:
+
+```php
+$invoice->currency_id = $usd->id;
+$invoice->amount = 1000; // Original amount in USD
+$invoice->amount_in_default_currency = $usd->convertToDefault(1000);
+// 1000 × 56.5 = 56,500 DOP
+```
+
+## Currency Conversion
+
+The `Currency` model provides conversion methods:
+
+### Convert from Default Currency
+
+```php
+$usd = Currency::where('code', 'USD')->first();
+
+// Convert 56,500 DOP to USD
+$amountInUsd = $usd->convertFromDefault(56500);
+// 56500 ÷ 56.5 = 1000 USD
+```
+
+### Convert to Default Currency
+
+```php
+// Convert 1000 USD to DOP
+$amountInDop = $usd->convertToDefault(1000);
+// 1000 × 56.5 = 56,500 DOP
+```
+
+### Convert with Historical Rates
+
+```php
+use Carbon\Carbon;
+
+$historicalDate = Carbon::parse('2024-01-15');
+
+// Convert using rate from specific date
+$amountInDop = $usd->convertToDefault(1000, $historicalDate);
+```
+
+### Format Currency Amounts
+
+```php
+$formatted = $usd->formatAmount(1000.50);
+// Returns: "$ 1,000.50"
+
+$formattedDop = $dop->formatAmount(56500);
+// Returns: "RD$ 56,500.00"
+```
+
+## Exchange Rate Variations
+
+### Calculating Rate Changes
+
+```php
+// Get percentage variation from previous rate
+$variation = $currency->getVariation();
+// Returns: 2.5 (meaning 2.5% increase from last rate)
+```
+
+This compares the latest two exchange rates:
+
+```php
+// If previous rate was 56.0 and current rate is 56.5:
+$variation = ((56.5 - 56.0) / 56.0) × 100 = 0.89%
+```
+
+### Displaying Rate History
+
+```php
+use App\Models\CurrencyRate;
+
+// Get historical rates for charting
+$rates = CurrencyRate::query()
+    ->where('currency_id', $usd->id)
+    ->where('effective_date', '>=', now()->subMonths(6))
+    ->orderBy('effective_date', 'asc')
+    ->get();
+
+// Format for frontend chart
+$chartData = $rates->map(fn($rate) => [
+    'date' => $rate->effective_date->format('Y-m-d'),
+    'rate' => (float) $rate->rate,
+]);
+```
+
+## Managing Currencies
+
+### Listing Currencies
+
+The currency index shows all currencies with current rates:
+
+```php
+$currencies = Currency::with(['rates' => function ($query) {
+    $query->latest('effective_date')->limit(1);
+}])->get();
+
+foreach ($currencies as $currency) {
+    $currentRate = $currency->getCurrentRate();
+    $variation = $currency->getVariation();
+    
+    // Display currency info
+}
+```
+
+### Updating Currencies
+
+```php
+use App\Actions\UpdateCurrencyAction;
+
+$action = new UpdateCurrencyAction();
+$action->handle($currency, [
+    'name' => 'Updated Name',
+    'symbol' => '$',
+    'is_active' => true,
+]);
+```
+
+### Deleting Currencies
+
+```php
+use App\Actions\DeleteCurrencyAction;
+
+$action = new DeleteCurrencyAction();
+try {
+    $action->handle($currency);
+} catch (ActionValidationException $e) {
+    // Cannot delete: currency is in use by transactions
+}
+```
+
+<Warning>
+You cannot delete a currency that is referenced by existing invoices or transactions. Set it as inactive instead.
+</Warning>
+
+## Currency Scopes
+
+The model provides useful query scopes:
+
+```php
+// Get only active currencies
+$activeCurrencies = Currency::active()->get();
+
+// Get default currency
+$defaultCurrency = Currency::default()->first();
+
+// Combine scopes
+$activeNonDefault = Currency::active()
+    ->where('is_default', false)
+    ->get();
+```
+
+## Best Practices
+
+1. **Update Rates Regularly**: Set up a scheduled task to update exchange rates daily
+2. **Lock Historical Data**: Never modify past exchange rates once transactions exist
+3. **Default Currency**: Choose your accounting currency as the default (usually local currency)
+4. **Rate Sources**: Use reliable sources for exchange rates (central bank, financial APIs)
+5. **Precision**: Store rates with sufficient decimal places (e.g., 4-6 decimals)
+6. **Display Formats**: Use proper currency formatting for each currency in the UI
+7. **Audit Trail**: Log all rate changes for compliance
+
+## Automated Rate Updates
+
+Implement a scheduled task to fetch rates from an API:
+
+```php
+namespace App\Console\Commands;
+
+use App\Models\Currency;
+use App\Actions\CreateCurrencyRateAction;
+use Illuminate\Support\Facades\Http;
+
+class UpdateExchangeRates extends Command
+{
+    protected $signature = 'rates:update';
+    
+    public function handle(CreateCurrencyRateAction $action)
+    {
+        $defaultCurrency = Currency::default()->first();
+        $currencies = Currency::active()
+            ->where('is_default', false)
+            ->get();
+        
+        foreach ($currencies as $currency) {
+            // Fetch rate from API (example)
+            $response = Http::get('https://api.exchangerate.host/latest', [
+                'base' => $defaultCurrency->code,
+                'symbols' => $currency->code,
+            ]);
+            
+            if ($response->successful()) {
+                $rate = $response->json()['rates'][$currency->code];
+                
+                $action->handle($currency, [
+                    'rate' => $rate,
+                    'effective_date' => now()->format('Y-m-d'),
+                ]);
+            }
+        }
+        
+        $this->info('Exchange rates updated successfully.');
+    }
+}
+```
+
+Schedule it in `routes/console.php`:
+
+```php
+Schedule::command('rates:update')->daily();
+```
+
+## Multi-Currency Reports
+
+When generating reports with multiple currencies:
+
+```php
+// Get invoices grouped by currency
+$invoicesByCurrency = Invoice::query()
+    ->selectRaw('currency_id, SUM(amount) as total')
+    ->groupBy('currency_id')
+    ->with('currency')
+    ->get();
+
+// Display totals
+foreach ($invoicesByCurrency as $group) {
+    $formatted = $group->currency->formatAmount($group->total);
+    echo "{$group->currency->code}: {$formatted}\n";
+}
+
+// Convert all to default currency for grand total
+$grandTotal = $invoicesByCurrency->sum(function ($group) {
+    return $group->currency->convertToDefault($group->total);
+});
+```
+
+## Related Resources
+
+- [Company Details](/admin/company-details) - Setting default currency
+- [Workspace Management](/admin/workspace-management) - Workspace-specific currency settings
+- [Multi-Tenancy](/admin/multi-tenancy) - Tenant isolation considerations

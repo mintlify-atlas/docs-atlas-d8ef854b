@@ -1,0 +1,331 @@
+---
+title: Product Catalog
+description: Create and manage your product catalog with pricing, inventory tracking, and detailed product information
+---
+
+## Overview
+
+OptiFlow's product catalog system allows you to maintain a comprehensive inventory of products and services. Products support flexible pricing, cost tracking, tax configuration, and optional stock management.
+
+<Info>
+Products are globally defined but stock is tracked per workspace, allowing the same product to have different quantities across multiple locations.
+</Info>
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Flexible Product Types" icon="box">
+    Support for physical goods, services, and custom product types with appropriate inventory rules.
+  </Card>
+  
+  <Card title="Price & Cost Tracking" icon="dollar-sign">
+    Track selling price and cost basis to calculate profit margins and profitability.
+  </Card>
+  
+  <Card title="SKU Management" icon="barcode">
+    Unique SKU identifiers for efficient product lookup and barcode scanning.
+  </Card>
+  
+  <Card title="Tax Configuration" icon="percent">
+    Assign default taxes to products for automatic calculation during invoicing.
+  </Card>
+</CardGroup>
+
+## Product Attributes
+
+### Core Properties
+
+```php
+// Product model structure (app/Models/Product.php)
+$product = Product::create([
+    'name' => 'Premium Widget',
+    'sku' => 'WGT-001',
+    'description' => 'High-quality widget with extended warranty',
+    'product_type' => ProductType::Physical, // or Service
+    'price' => 99.99,
+    'cost' => 45.00,
+    'track_stock' => true,
+    'is_active' => true,
+    'default_tax_id' => 1, // Optional default tax
+]);
+```
+
+### Product Properties
+
+- **Name**: Product display name
+- **SKU**: Stock Keeping Unit (unique identifier)
+- **Description**: Detailed product description
+- **Product Type**: Physical product or service
+- **Price**: Selling price (decimal with 2 places)
+- **Cost**: Cost basis for profit calculation
+- **Track Stock**: Enable/disable inventory tracking
+- **Is Active**: Product status (active products appear in searches)
+- **Default Tax**: Pre-selected tax for invoices
+
+## Creating Products
+
+Products can be created through the UI or programmatically:
+
+<CodeGroup>
+```php Controller Example
+// ProductController handles CRUD operations
+use App\Actions\CreateProductAction;
+
+$product = CreateProductAction::handle($request->validated());
+```
+
+```php Direct Creation
+$product = Product::create([
+    'name' => 'Widget Pro',
+    'sku' => 'WGTPRO-100',
+    'price' => 149.99,
+    'cost' => 75.00,
+    'track_stock' => true,
+    'is_active' => true,
+]);
+```
+</CodeGroup>
+
+## Product Types
+
+<Tabs>
+  <Tab title="Physical Products">
+    Physical goods that require inventory tracking:
+    
+    - Stock quantities monitored
+    - Warehouse locations tracked
+    - Stock movements recorded
+    - Low stock alerts available
+    
+    ```php
+    $product->product_type = ProductType::Physical;
+    $product->track_stock = true;
+    ```
+  </Tab>
+  
+  <Tab title="Services">
+    Non-tangible services without inventory:
+    
+    - No stock tracking required
+    - Sold without quantity constraints
+    - Used for consulting, labor, etc.
+    
+    ```php
+    $product->product_type = ProductType::Service;
+    $product->track_stock = false;
+    ```
+  </Tab>
+</Tabs>
+
+## Pricing & Profitability
+
+### Price and Cost
+
+```php
+// Set product pricing
+$product->price = 199.99; // Selling price
+$product->cost = 120.00;  // Cost of goods
+$product->save();
+
+// Calculate profit metrics
+$profit = $product->profit; // 79.99
+$profitMargin = $product->profit_margin; // 66.66%
+```
+
+### Profit Calculations
+
+OptiFlow automatically calculates profitability:
+
+- **Profit**: `price - cost`
+- **Profit Margin**: `((price - cost) / cost) * 100`
+
+<Note>
+Profit calculations only work when a cost is set. Products without a cost will return `null` for profit metrics.
+</Note>
+
+## Stock Tracking
+
+### Enabling Stock Management
+
+```php
+// Enable stock tracking for a product
+$product->track_stock = true;
+$product->save();
+
+// Check if product tracks stock
+if ($product->track_stock) {
+    // Stock operations available
+}
+```
+
+### Workspace Stock Levels
+
+Stock is tracked per workspace:
+
+```php
+// Get stock for current workspace
+$stock = $product->stockInCurrentWorkspace;
+$quantity = $stock?->quantity ?? 0;
+
+// Get stock for specific workspace
+$warehouseStock = $product->getStockForWorkspace($workspace);
+$qty = $product->getStockQuantityForWorkspace($workspace);
+
+// Check if sufficient stock available
+if ($product->hasSufficientStock($workspace, $requiredQty)) {
+    // Proceed with sale
+}
+```
+
+### Low Stock Monitoring
+
+```php
+// Query products with low stock
+$lowStockProducts = Product::lowStock($workspace)->get();
+
+// Products where quantity <= minimum_quantity
+```
+
+## Product Activation
+
+Control product visibility and availability:
+
+```php
+// Activate a product
+$product->is_active = true;
+$product->save();
+
+// Deactivate a product
+$product->is_active = false;
+$product->save();
+```
+
+<Warning>
+Inactive products are automatically hidden from product searches and cannot be added to new invoices. Existing invoices with inactive products remain unaffected.
+</Warning>
+
+### Active Product Scope
+
+OptiFlow uses global scopes to filter products:
+
+```php
+// Only active products returned by default
+$products = Product::all();
+
+// Include inactive products
+$allProducts = Product::withoutGlobalScope(ActiveProductScope::class)->get();
+```
+
+## Tax Configuration
+
+### Default Taxes
+
+Assign a default tax to automatically apply during invoicing:
+
+```php
+// Set default tax
+$product->default_tax_id = $tax->id;
+$product->save();
+
+// Access default tax relationship
+$defaultTax = $product->defaultTax;
+```
+
+## Product Relationships
+
+### Invoice Items
+
+```php
+// Get all invoice items using this product
+$invoiceItems = $product->invoiceItems;
+
+// Count usage
+$usageCount = $product->invoice_items_count;
+```
+
+### Stock Records
+
+```php
+// Get all stock records across workspaces
+$allStocks = $product->stocks;
+
+// Get stock movements history
+$movements = $product->stockMovements;
+```
+
+## Searching Products
+
+Use the ProductSearch helper for efficient product lookups:
+
+```php
+use App\Support\ProductSearch;
+
+$search = app(ProductSearch::class);
+
+// Search by name or SKU
+$results = $search->search('widget', $workspace);
+
+// Find multiple products by ID
+$products = $search->findByIds([1, 2, 3], $workspace);
+```
+
+## Use Cases
+
+<AccordionGroup>
+  <Accordion title="Retail Store">
+    Maintain a comprehensive product catalog with SKUs, pricing, and stock tracking across multiple store locations.
+  </Accordion>
+  
+  <Accordion title="Service Business">
+    Create service-type products for consulting hours, maintenance packages, or subscription services without inventory tracking.
+  </Accordion>
+  
+  <Accordion title="Wholesale Distribution">
+    Track cost and selling prices to monitor profit margins on wholesale products across different warehouses.
+  </Accordion>
+  
+  <Accordion title="Manufacturing">
+    Manage raw materials and finished goods with detailed cost tracking and stock monitoring.
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<CardGroup cols={1}>
+  <Card title="Unique SKUs">
+    Always use unique SKU codes for efficient product identification and barcode scanning integration.
+  </Card>
+  
+  <Card title="Regular Price Updates">
+    Keep prices and costs current to ensure accurate profit margin calculations and financial reporting.
+  </Card>
+  
+  <Card title="Stock Tracking">
+    Enable stock tracking only for products that require inventory management to keep your system clean.
+  </Card>
+  
+  <Card title="Inactive vs. Delete">
+    Deactivate products instead of deleting them to preserve historical invoice data and reporting accuracy.
+  </Card>
+</CardGroup>
+
+## API Reference
+
+Key product model methods:
+
+- `getStockForWorkspace(Workspace|int)` - Get stock record for workspace
+- `getStockQuantityForWorkspace(Workspace|int)` - Get quantity for workspace
+- `hasSufficientStock(Workspace|int, float)` - Check stock availability
+- `stocks()` - Relationship to ProductStock records
+- `stockMovements()` - Relationship to StockMovement records
+- `invoiceItems()` - Relationship to InvoiceItem records
+- `defaultTax()` - Relationship to Tax model
+
+Model location: `app/Models/Product.php:1`
+
+## Related Resources
+
+- [Inventory Management](/features/inventory-management)
+- [Invoicing](/features/invoicing)
+- [Multi-Workspace](/features/multi-workspace)
+- [Tax Configuration](/guides/tax-configuration)

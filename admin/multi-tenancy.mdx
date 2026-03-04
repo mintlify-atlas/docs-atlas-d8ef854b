@@ -1,0 +1,190 @@
+---
+title: Multi-Tenancy Architecture
+description: Understanding how multi-tenancy works in OptiFlow
+---
+
+OptiFlow uses a multi-tenant architecture powered by the [stancl/tenancy](https://tenancyforlaravel.com) Laravel package. This architecture allows multiple independent organizations (tenants) to use the same application while maintaining complete data isolation and security.
+
+## How Multi-Tenancy Works
+
+OptiFlow implements **database-per-tenant** architecture, where each tenant has its own isolated database:
+
+- **Central Database**: Stores tenant metadata, client information, and manages tenant provisioning
+- **Tenant Databases**: Each tenant gets a separate database (named `optiflow_{tenant_id}`) containing their business data
+- **Domain-Based Access**: Tenants are identified by subdomain (e.g., `clientname.optiflow.com.do`)
+
+### Data Separation
+
+The multi-tenancy package ensures complete data isolation:
+
+- Database connections are automatically switched based on the current tenant
+- Cache is scoped per tenant using tags
+- File storage is separated using tenant-specific paths
+- Queue jobs maintain tenant context
+
+<Note>
+The central database uses the `central` connection, while tenant databases use the `tenant` connection that is dynamically created at runtime.
+</Note>
+
+## Central vs Tenant Databases
+
+### Central Database Tables
+
+- `tenants` - Tenant metadata and configuration
+- `domains` - Subdomain mappings for each tenant
+- `clients` - Client/customer information
+
+### Tenant Database Tables
+
+Each tenant database contains:
+
+- Users and workspace data
+- Invoices, quotations, prescriptions
+- Products, clients, contacts
+- Company details and configurations
+- Document subtypes (NCF sequences)
+- Currencies and rates
+
+## Subdomain-Based Tenant Access
+
+Tenants are accessed via subdomains configured in the `config/tenancy.php` file:
+
+```php
+'central_domains' => [
+    'opticanet.test',
+    'optiflow.com.do',
+],
+```
+
+When a user visits `acme.optiflow.com.do`, the tenancy middleware:
+
+1. Identifies the tenant from the subdomain
+2. Initializes tenant context
+3. Switches to the tenant's database
+4. Loads tenant-specific configurations
+
+<Warning>
+All tenant routes must use the `InitializeTenancyByDomain` middleware to ensure proper tenant identification and data isolation.
+</Warning>
+
+## Creating and Managing Tenants
+
+### Creating a New Tenant
+
+Tenants are created through the Filament admin panel at `app/Filament/Resources/Tenants/`:
+
+<Steps>
+  <Step title="Create Tenant Record">
+    Navigate to the Tenants resource in Filament admin and create a new tenant with:
+    - Unique tenant ID
+    - Tenant name
+    - Subdomain/domain
+    - Associated client
+  </Step>
+  
+  <Step title="Database Creation">
+    The tenant database is automatically created when the tenant record is saved. The database name follows the pattern: `optiflow_{tenant_id}`
+  </Step>
+  
+  <Step title="Run Migrations">
+    Tenant-specific migrations from `database/migrations/tenant/` are automatically run using:
+    ```bash
+    php artisan tenants:migrate --tenants={tenant_id}
+    ```
+  </Step>
+  
+  <Step title="Seed Initial Data">
+    Optionally seed the tenant database with initial data:
+    ```bash
+    php artisan tenants:seed --tenants={tenant_id}
+    ```
+  </Step>
+</Steps>
+
+### Tenant Model Reference
+
+The `App\Models\Central\Tenant` model (located at `app/Models/Central/Tenant.php:42`) implements the tenant functionality:
+
+```php
+namespace App\Models\Central;
+
+use Stancl\Tenancy\Database\Models\Tenant as BaseTenant;
+use Stancl\Tenancy\Contracts\TenantWithDatabase;
+
+class Tenant extends BaseTenant implements TenantWithDatabase
+{
+    use HasDatabase, HasDomains;
+    
+    // Custom columns: id, name, domain, client_id
+}
+```
+
+## Tenancy Configuration
+
+Key configuration options in `config/tenancy.php`:
+
+### Database Settings
+
+```php
+'database' => [
+    'central_connection' => 'central',
+    'prefix' => 'optiflow_',
+    'suffix' => '',
+],
+```
+
+### Bootstrappers
+
+These make Laravel features tenant-aware:
+
+- `DatabaseTenancyBootstrapper` - Switches database connections
+- `CacheTenancyBootstrapper` - Scopes cache by tenant
+- `FilesystemTenancyBootstrapper` - Separates file storage
+- `QueueTenancyBootstrapper` - Maintains tenant context in queued jobs
+
+## Working with Tenant Context
+
+### Running Commands for Specific Tenants
+
+```bash
+# Run migrations for all tenants
+php artisan tenants:migrate
+
+# Run migrations for specific tenant
+php artisan tenants:migrate --tenants=tenant-uuid
+
+# Run artisan command in tenant context
+php artisan tenants:run sync:dgii --tenants=tenant-uuid
+```
+
+### Accessing Tenant Data in Code
+
+```php
+use Stancl\Tenancy\Facades\Tenancy;
+
+// Get current tenant
+$tenant = Tenancy::tenant();
+
+// Execute code in specific tenant context
+tenancy()->initialize($tenant);
+// ... tenant-specific operations
+tenancy()->end();
+```
+
+<Warning>
+Always ensure you're in the correct tenant context before performing database operations. Mixing central and tenant data can cause serious issues.
+</Warning>
+
+## Best Practices
+
+1. **Never Mix Contexts**: Don't query central models from tenant routes or vice versa
+2. **Use Middleware**: Always apply tenancy middleware to tenant routes
+3. **Test Isolation**: Verify data isolation between tenants in testing
+4. **Backup Strategy**: Implement per-tenant backup strategies
+5. **Migrations**: Keep tenant migrations in `database/migrations/tenant/` directory
+
+## Related Resources
+
+- [Workspace Management](/admin/workspace-management) - Managing workspaces within tenants
+- [User Roles & Permissions](/admin/user-roles) - Configuring user access
+- [Official Tenancy Documentation](https://tenancyforlaravel.com/docs/v3/)

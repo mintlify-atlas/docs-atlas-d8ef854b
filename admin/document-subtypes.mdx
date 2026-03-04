@@ -1,0 +1,371 @@
+---
+title: Document Subtypes
+description: Configure document subtypes and NCF sequences for invoicing
+---
+
+Document Subtypes in OptiFlow manage different types of fiscal documents, including NCF (Números de Comprobante Fiscal) sequences required for Dominican Republic tax compliance. Each subtype maintains its own numbering sequence and validity period.
+
+## What are Document Subtypes?
+
+Document subtypes define categories of invoices and quotations with specific numbering sequences:
+
+- **Invoice Subtypes**: Different types of fiscal invoices (e.g., B01 - Tax Credit Invoice, B02 - Consumer Invoice)
+- **Quotation Subtypes**: Quotation numbering sequences
+- **NCF Compliance**: For Dominican Republic, manages official NCF sequences
+
+<Note>
+NCF (Números de Comprobante Fiscal) are mandatory fiscal document numbers required by DGII (Dominican tax authority) for valid invoices.
+</Note>
+
+## Document Subtype Model
+
+The `DocumentSubtype` model (`app/Models/DocumentSubtype.php:58`) contains:
+
+```php
+$subtype->name;              // e.g., "Comprobante Fiscal Crédito"
+$subtype->type;              // DocumentType enum: Invoice or Quotation
+$subtype->prefix;            // NCF prefix, e.g., "B01"
+$subtype->start_number;      // Starting number: 1
+$subtype->end_number;        // Ending number: 100000
+$subtype->next_number;       // Next available number
+$subtype->valid_until_date;  // Expiration date
+$subtype->is_default;        // Default subtype for document type
+```
+
+## NCF (Números de Comprobante Fiscal)
+
+For Dominican Republic tax compliance:
+
+### NCF Types and Prefixes
+
+Common NCF types:
+
+| Prefix | Name | Description |
+|--------|------|-------------|
+| B01 | Crédito Fiscal | Tax Credit Invoice (for businesses) |
+| B02 | Consumidor Final | Consumer Invoice (for individuals) |
+| B14 | Régimen Especial | Special Regime Invoice |
+| B15 | Gubernamental | Government Invoice |
+| B16 | Exportaciones | Export Invoice |
+
+### NCF Format
+
+NCF numbers follow this format:
+```
+B01 + 00000001 = B0100000001
+(Prefix + 8-digit sequence number)
+```
+
+### NCF Sequence Example
+
+```php
+// Creating an NCF sequence
+$subtype = new DocumentSubtype();
+$subtype->name = 'Comprobante Fiscal Crédito';
+$subtype->type = DocumentType::Invoice;
+$subtype->prefix = 'B01';
+$subtype->start_number = 1;
+$subtype->end_number = 100000;
+$subtype->next_number = 1;
+$subtype->valid_until_date = now()->addYear();
+$subtype->save();
+```
+
+## Creating Document Subtypes
+
+### Using the Controller
+
+The `DocumentSubtypeController` (`app/Http/Controllers/DocumentSubtypeController.php:20`) manages document subtypes:
+
+<Steps>
+  <Step title="Navigate to Document Subtypes">
+    Access the document subtypes page:
+    ```
+    GET /document-subtypes
+    ```
+  </Step>
+  
+  <Step title="Create New Subtype">
+    Click "Create" and fill in the form:
+    - Name (e.g., "Crédito Fiscal")
+    - Type (Invoice or Quotation)
+    - NCF Prefix (e.g., "B01")
+    - Start and end numbers
+    - Valid until date
+  </Step>
+  
+  <Step title="Save Subtype">
+    Submit the form to create the document subtype
+  </Step>
+</Steps>
+
+### Using CreateDocumentSubtypeAction
+
+```php
+use App\Actions\CreateDocumentSubtypeAction;
+use App\Enums\DocumentType;
+
+$action = new CreateDocumentSubtypeAction();
+$action->handle($user, [
+    'name' => 'Comprobante Fiscal Crédito',
+    'type' => DocumentType::Invoice->value,
+    'prefix' => 'B01',
+    'start_number' => 1,
+    'end_number' => 100000,
+    'next_number' => 1,
+    'valid_until_date' => now()->addYear()->format('Y-m-d'),
+    'is_default' => true,
+]);
+```
+
+## Configuring Document Subtypes
+
+### Setting Start and End Numbers
+
+NCF sequences have defined ranges authorized by DGII:
+
+```php
+$subtype->start_number = 1;
+$subtype->end_number = 100000;  // You have 100,000 NCFs in this sequence
+$subtype->next_number = 1;       // Next NCF to be issued
+```
+
+<Warning>
+The end number is determined by DGII authorization. Do not exceed your authorized range or you'll need to request a new sequence.
+</Warning>
+
+### Setting Validity Period
+
+NCF sequences have expiration dates:
+
+```php
+// Set valid until one year from now
+$subtype->valid_until_date = now()->addYear();
+
+// Check if still valid
+if ($subtype->isValid()) {
+    // Can still issue NCFs
+}
+```
+
+### Sequence Validation
+
+The model provides validation methods:
+
+```php
+// Check if sequence is valid (not expired, within range)
+$subtype->isValid(); // boolean
+
+// Check if near expiration (within 30 days)
+$subtype->isNearExpiration(); // boolean
+
+// Check if running low (less than 100 numbers remaining)
+$subtype->isRunningLow(); // boolean
+```
+
+## Generating NCF Numbers
+
+### Getting the Next NCF
+
+```php
+// Get next NCF and increment sequence
+$ncf = $subtype->getNextNcfNumber();
+// Returns: "B0100000001" (and increments next_number)
+
+// Preview next NCF without incrementing
+$previewNcf = $subtype->generateNCF();
+// Returns: "B0100000001" (does NOT increment)
+```
+
+### Using NCF in Invoices
+
+When creating an invoice:
+
+```php
+use App\Models\DocumentSubtype;
+use App\Models\Invoice;
+
+// Get the default or preferred document subtype
+$subtype = DocumentSubtype::query()
+    ->forInvoice()
+    ->where('is_default', true)
+    ->first();
+
+// Generate NCF for invoice
+$invoice = new Invoice();
+$invoice->ncf = $subtype->getNextNcfNumber();
+$invoice->document_subtype_id = $subtype->id;
+$invoice->save();
+```
+
+<Warning>
+**NCF Generation Exception**: If the sequence is invalid or expired, `getNextNcfNumber()` throws a `ReportableActionException`. Always check validity before generating NCFs.
+</Warning>
+
+## Workspace-Preferred Subtypes
+
+Workspaces can set preferred document subtypes:
+
+### Setting Default Subtype per Workspace
+
+```php
+use App\Actions\SetWorkspacePreferredDocumentSubtypeAction;
+
+$action = new SetWorkspacePreferredDocumentSubtypeAction();
+$action->handle($workspace, $documentSubtype);
+```
+
+This allows different workspaces to use different NCF sequences even within the same tenant.
+
+### Getting Workspace Preferred Subtype
+
+```php
+// Get preferred subtype for a workspace
+$preferredSubtype = $workspace->getPreferredDocumentSubtype();
+
+if ($preferredSubtype) {
+    $ncf = $preferredSubtype->getNextNcfNumber();
+}
+```
+
+### Using SetDefaultDocumentSubtypeController
+
+Set a global default subtype:
+
+```php
+use App\Actions\SetDefaultDocumentSubtypeAction;
+
+$action = new SetDefaultDocumentSubtypeAction();
+$action->handle($documentSubtype);
+```
+
+This marks the subtype as the default for its document type (Invoice or Quotation).
+
+## Managing Document Subtypes
+
+### Listing Subtypes
+
+Filter by document type:
+
+```php
+use App\Enums\DocumentType;
+use App\Models\DocumentSubtype;
+
+// Get all invoice subtypes
+$invoiceSubtypes = DocumentSubtype::forInvoice()->get();
+
+// Get all quotation subtypes
+$quotationSubtypes = DocumentSubtype::forQuotation()->get();
+
+// Get active (valid) subtypes
+$activeSubtypes = DocumentSubtype::active()->get();
+```
+
+### Updating Subtypes
+
+Only certain fields can be updated:
+
+```php
+use App\Actions\UpdateDocumentSubtypeAction;
+
+$action = new UpdateDocumentSubtypeAction();
+$action->handle($user, $documentSubtype, [
+    'name' => 'Updated Name',
+    'valid_until_date' => now()->addMonths(6)->format('Y-m-d'),
+    // Note: Cannot update prefix, start_number, or next_number
+]);
+```
+
+<Warning>
+You cannot modify the prefix, start number, or current sequence number of an existing subtype. Create a new subtype if you need different values.
+</Warning>
+
+## Monitoring NCF Sequences
+
+### Low Inventory Alerts
+
+Monitor sequences running low:
+
+```php
+$subtypes = DocumentSubtype::active()->get();
+
+foreach ($subtypes as $subtype) {
+    if ($subtype->isRunningLow()) {
+        // Alert: Less than 100 NCFs remaining
+        // Request new sequence from DGII
+    }
+    
+    if ($subtype->isNearExpiration()) {
+        // Alert: Expires within 30 days
+        // Request renewal from DGII
+    }
+}
+```
+
+### Sequence Statistics
+
+```php
+$subtype = DocumentSubtype::find(1);
+
+$used = $subtype->next_number - $subtype->start_number;
+$remaining = $subtype->end_number - $subtype->next_number + 1;
+$totalAuthorized = $subtype->end_number - $subtype->start_number + 1;
+$percentageUsed = ($used / $totalAuthorized) * 100;
+```
+
+## Best Practices
+
+1. **Request Sequences Early**: Request new NCF sequences from DGII well before running out
+2. **Monitor Expiration**: Set up alerts for sequences expiring within 60 days
+3. **Backup Sequences**: Have backup authorized sequences ready
+4. **Per-Location Sequences**: Use workspace-preferred subtypes for multi-location businesses
+5. **Audit Trail**: Log all NCF generation for tax compliance
+6. **Validation**: Always call `isValid()` before generating NCFs
+
+## DGII Compliance
+
+### Requesting NCF Sequences
+
+To obtain NCF sequences from DGII:
+
+<Steps>
+  <Step title="Access DGII Portal">
+    Log in to the DGII taxpayer portal
+  </Step>
+  
+  <Step title="Request NCF Authorization">
+    Request authorization for the specific NCF type and quantity
+  </Step>
+  
+  <Step title="Receive Authorization">
+    DGII will provide:
+    - NCF type/prefix
+    - Start number
+    - End number
+    - Valid until date
+  </Step>
+  
+  <Step title="Configure in OptiFlow">
+    Create the document subtype with the authorized values
+  </Step>
+</Steps>
+
+### NCF Reporting
+
+NCF usage must be reported to DGII monthly. OptiFlow provides data for reporting:
+
+```php
+// Get all invoices with NCFs for reporting period
+$invoices = Invoice::query()
+    ->whereBetween('created_at', [$startDate, $endDate])
+    ->whereNotNull('ncf')
+    ->with('documentSubtype')
+    ->get();
+```
+
+## Related Resources
+
+- [Company Details](/admin/company-details) - Setting up RNC and company info
+- [Workspace Management](/admin/workspace-management) - Workspace-specific preferences
+- [Integrations](/admin/integrations) - DGII data synchronization
+- [DGII Official Documentation](https://dgii.gov.do) - Dominican tax authority

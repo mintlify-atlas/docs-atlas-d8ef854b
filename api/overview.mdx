@@ -1,0 +1,232 @@
+---
+title: 'API Overview'
+description: 'Learn how to integrate with the OptiFlow API'
+icon: 'code'
+---
+
+## Introduction
+
+The OptiFlow API provides programmatic access to your business management system. Built on Laravel 12 with a RESTful architecture, the API enables you to manage invoices, quotations, products, contacts, inventory, and workspaces.
+
+## Base URL
+
+The OptiFlow API uses tenant-based URLs with subdomain routing:
+
+```
+https://{tenant}.yourdomain.com/api/v1
+```
+
+Where `{tenant}` is your organization's unique subdomain identifier.
+
+<Note>
+  All API requests must include the tenant subdomain. The system uses Laravel's `stancl/tenancy` package to initialize the correct tenant context based on the subdomain.
+</Note>
+
+## Authentication
+
+OptiFlow uses Laravel Sanctum for API authentication. All API requests must include a valid API token in the request headers. See the [Authentication](/api/authentication) page for detailed information.
+
+## Request Format
+
+All API requests should:
+
+- Use HTTPS
+- Include the `Accept: application/json` header
+- Include the `Authorization: Bearer {token}` header
+- Send request data as JSON with `Content-Type: application/json`
+
+### Example Request
+
+```bash
+curl -X GET https://acme.yourdomain.com/api/v1/invoices \
+  -H "Accept: application/json" \
+  -H "Authorization: Bearer your-api-token" \
+  -H "Content-Type: application/json"
+```
+
+## Response Format
+
+All API responses are returned in JSON format. Successful responses include the requested data, while error responses include error details.
+
+### Success Response
+
+```json
+{
+  "data": {
+    "id": 1,
+    "document_number": "INV-0001",
+    "total_amount": "1500.00",
+    "status": "pending_payment"
+  }
+}
+```
+
+### Error Response
+
+```json
+{
+  "message": "The given data was invalid.",
+  "errors": {
+    "contact_id": [
+      "The contact id field is required."
+    ]
+  }
+}
+```
+
+## HTTP Status Codes
+
+The API uses standard HTTP status codes:
+
+| Status Code | Description |
+|-------------|-------------|
+| `200` | OK - Request succeeded |
+| `201` | Created - Resource successfully created |
+| `204` | No Content - Request succeeded with no response body |
+| `400` | Bad Request - Invalid request data |
+| `401` | Unauthorized - Missing or invalid authentication |
+| `403` | Forbidden - Insufficient permissions |
+| `404` | Not Found - Resource does not exist |
+| `422` | Unprocessable Entity - Validation error |
+| `429` | Too Many Requests - Rate limit exceeded |
+| `500` | Internal Server Error - Server error |
+
+## Pagination
+
+List endpoints support pagination using query parameters:
+
+<ParamField query="page" type="integer" default="1">
+  Page number to retrieve
+</ParamField>
+
+<ParamField query="per_page" type="integer" default="15">
+  Number of items per page (max 100)
+</ParamField>
+
+### Paginated Response
+
+```json
+{
+  "data": [
+    // ... items
+  ],
+  "meta": {
+    "current_page": 1,
+    "last_page": 5,
+    "per_page": 15,
+    "total": 72
+  },
+  "links": {
+    "first": "https://acme.yourdomain.com/api/v1/invoices?page=1",
+    "last": "https://acme.yourdomain.com/api/v1/invoices?page=5",
+    "next": "https://acme.yourdomain.com/api/v1/invoices?page=2",
+    "prev": null
+  }
+}
+```
+
+## Filtering and Sorting
+
+Many list endpoints support filtering and sorting:
+
+<ParamField query="filter[field]" type="string">
+  Filter results by field value
+</ParamField>
+
+<ParamField query="sort" type="string">
+  Sort by field (prefix with `-` for descending)
+</ParamField>
+
+### Example
+
+```bash
+GET /api/v1/invoices?filter[status]=pending_payment&sort=-issue_date
+```
+
+## Rate Limiting
+
+The API implements rate limiting to ensure fair usage:
+
+- **Authenticated requests**: 60 requests per minute per user
+- **Unauthenticated requests**: 10 requests per minute per IP
+
+When rate limited, the API returns a `429 Too Many Requests` response with headers:
+
+```
+X-RateLimit-Limit: 60
+X-RateLimit-Remaining: 0
+Retry-After: 42
+```
+
+## Multi-Tenancy Considerations
+
+<Warning>
+  All API operations are scoped to the tenant specified in the subdomain. Resources cannot be accessed across tenants, even with valid authentication.
+</Warning>
+
+### Workspace Context
+
+Many resources (products, invoices, contacts) are further scoped to specific workspaces within a tenant. When working with these resources:
+
+- Users can only access resources in workspaces they belong to
+- Some operations require specifying a `workspace_id`
+- Stock levels and inventory are managed per workspace
+
+See the [Workspaces](/api/workspaces) documentation for details on managing workspace context.
+
+## Webhooks
+
+OptiFlow supports webhooks for real-time notifications (coming soon). You'll be able to subscribe to events like:
+
+- Invoice created/updated/paid
+- Quotation converted to invoice
+- Product stock low
+- Payment received
+
+## SDK and Libraries
+
+<CardGroup cols={2}>
+  <Card title="PHP SDK" icon="php" href="#">
+    Official PHP SDK for Laravel applications
+  </Card>
+  <Card title="JavaScript SDK" icon="js" href="#">
+    JavaScript/Node.js SDK with TypeScript support
+  </Card>
+</CardGroup>
+
+## API Versioning
+
+The current API version is **v1**. Version information is included in the URL path:
+
+```
+https://{tenant}.yourdomain.com/api/v1/...
+```
+
+<Note>
+  Future API versions will be released with a deprecation period. We'll provide advance notice before deprecating any version.
+</Note>
+
+## Support
+
+For API support:
+
+- Check the [API Reference](/api-reference) for detailed endpoint documentation
+- Review our [GitHub Issues](https://github.com/your-org/optiflow)
+- Contact support at support@optiflow.com
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="key" href="/api/authentication">
+    Learn how to authenticate API requests
+  </Card>
+  <Card title="Invoices" icon="file-invoice" href="/api/invoices">
+    Manage invoices via the API
+  </Card>
+  <Card title="Products" icon="box" href="/api/products">
+    Create and update products
+  </Card>
+  <Card title="Contacts" icon="users" href="/api/contacts">
+    Manage customer and supplier contacts
+  </Card>
+</CardGroup>

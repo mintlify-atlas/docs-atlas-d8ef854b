@@ -1,0 +1,381 @@
+---
+title: Quotations
+description: Create quotations for customers and seamlessly convert them to invoices when accepted
+---
+
+## Overview
+
+OptiFlow's quotation system allows you to create detailed price quotes for customers. Quotations can be tracked through various stages and easily converted to invoices once accepted, streamlining your sales workflow.
+
+<Info>
+Quotations work similarly to invoices but don't affect inventory until they're converted. This allows you to quote products without committing stock.
+</Info>
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Professional Quotes" icon="file-invoice">
+    Generate detailed quotations with line items, pricing, taxes, and custom terms.
+  </Card>
+  
+  <Card title="Status Tracking" icon="list-check">
+    Track quotation lifecycle from draft through accepted, rejected, or expired.
+  </Card>
+  
+  <Card title="One-Click Conversion" icon="arrow-right-arrow-left">
+    Convert accepted quotations to invoices instantly, preserving all details.
+  </Card>
+  
+  <Card title="PDF Export" icon="file-pdf">
+    Generate professional PDF quotations with your branding for customer delivery.
+  </Card>
+</CardGroup>
+
+## Quotation Structure
+
+### Core Properties
+
+```php
+// Quotation model (app/Models/Quotation.php)
+$quotation = Quotation::create([
+    'workspace_id' => $workspace->id,
+    'contact_id' => $customer->id,
+    'document_subtype_id' => $documentSubtype->id,
+    'document_number' => 'QUO-2024-0001',
+    'status' => QuotationStatus::Draft,
+    'issue_date' => now(),
+    'due_date' => now()->addDays(15), // Quote validity period
+    'subtotal_amount' => 100.00,
+    'tax_amount' => 18.00,
+    'discount_amount' => 0.00,
+    'total_amount' => 118.00,
+    'notes' => 'Quote valid for 15 days',
+    'created_by' => auth()->id(),
+    'currency_id' => 1,
+]);
+```
+
+### Quotation Fields
+
+- **Document Number**: Unique quotation number (auto-generated)
+- **Status**: Current quotation status
+- **Issue Date**: When quotation was created
+- **Due Date**: Quote expiration date
+- **Contact**: Customer receiving the quote
+- **Document Subtype**: Quotation type/template
+- **Amounts**: Subtotal, tax, discount, and total
+- **Notes**: Terms, validity period, or custom message
+- **Currency**: Quotation currency
+- **Created By**: User who created the quotation
+
+## Quotation Statuses
+
+<Tabs>
+  <Tab title="Draft">
+    Quotation is being prepared:
+    
+    - Can be edited freely
+    - Not sent to customer
+    - Not counted in sales pipeline
+  </Tab>
+  
+  <Tab title="Sent">
+    Quotation sent to customer:
+    
+    - Awaiting customer response
+    - Can still be edited
+    - Counted in pipeline
+  </Tab>
+  
+  <Tab title="Accepted">
+    Customer accepted the quote:
+    
+    - Ready for conversion to invoice
+    - Counted as won opportunity
+  </Tab>
+  
+  <Tab title="Rejected">
+    Customer declined:
+    
+    - Quote not proceeding
+    - Counted as lost opportunity
+  </Tab>
+  
+  <Tab title="Expired">
+    Quote validity period passed:
+    
+    - No longer valid
+    - Can be renewed with new date
+  </Tab>
+</Tabs>
+
+## Creating Quotations
+
+### Quotation Workflow
+
+```php
+// Using QuotationController
+use App\Actions\CreateQuotationAction;
+
+$result = CreateQuotationAction::handle($workspace, [
+    'contact_id' => $customer->id,
+    'document_subtype_id' => $documentSubtype->id,
+    'issue_date' => now(),
+    'due_date' => now()->addDays(15),
+    'items' => [
+        [
+            'product_id' => $product->id,
+            'description' => 'Premium Widget',
+            'quantity' => 5,
+            'unit_price' => 99.99,
+            'discount' => 10, // 10% discount
+            'tax_ids' => [1], // Apply taxes
+        ],
+    ],
+    'notes' => 'This quotation is valid for 15 days from issue date.',
+]);
+```
+
+### Quotation Items
+
+Each quotation contains line items:
+
+```php
+// QuotationItem model
+$item = QuotationItem::create([
+    'quotation_id' => $quotation->id,
+    'product_id' => $product->id,
+    'description' => 'Premium Widget',
+    'quantity' => 5,
+    'unit_price' => 99.99,
+    'discount' => 49.99, // Amount or percentage
+    'tax_amount' => 80.99,
+    'total' => 529.94,
+]);
+
+// Attach taxes to item
+$item->taxes()->attach([1]);
+```
+
+<Note>
+Quotation items have the same structure as invoice items, making conversion seamless.
+</Note>
+
+## Converting to Invoices
+
+Convert accepted quotations to invoices:
+
+```php
+// Using ConvertQuotationToInvoiceController
+use App\Http\Controllers\ConvertQuotationToInvoiceController;
+
+// POST /quotations/{quotation}/convert
+// Creates an invoice with all quotation details
+
+$invoice = ConvertQuotationToInvoiceAction::handle($quotation, [
+    'issue_date' => now(),
+    'due_date' => now()->addDays(30),
+    'payment_term' => 'Net 30',
+]);
+```
+
+### Conversion Process
+
+When converting a quotation:
+
+1. New invoice is created
+2. All quotation items are copied
+3. Taxes and discounts are preserved
+4. Stock is decreased (if products track inventory)
+5. Quotation status can be updated to "Converted"
+
+<Warning>
+Conversion creates a new invoice but doesn't automatically delete or archive the quotation. Update the quotation status separately if needed.
+</Warning>
+
+## PDF Generation
+
+Generate professional PDF quotations:
+
+```php
+// Download quotation PDF
+use App\Http\Controllers\DownloadQuotationPdfController;
+
+// Route: GET /quotations/{quotation}/pdf
+// Generates branded PDF with company details
+```
+
+### Bulk PDF Download
+
+```php
+// Download multiple quotations as ZIP
+use App\Http\Controllers\BulkDownloadQuotationPdfController;
+
+// Generate PDFs for selected quotations
+```
+
+## Quotation Management
+
+### Editing Quotations
+
+Quotations can be edited before conversion:
+
+```php
+// Update quotation
+use App\Actions\UpdateQuotationAction;
+
+$result = UpdateQuotationAction::handle($quotation, [
+    'status' => QuotationStatus::Accepted,
+    'due_date' => now()->addDays(30),
+    'items' => [
+        // Updated items
+    ],
+]);
+```
+
+### Recalculating Totals
+
+```php
+// Recalculate total from items
+$quotation->recalculateTotal();
+
+// Total is sum of all item totals
+$total = $quotation->items()->sum('total');
+```
+
+## Quotation Relationships
+
+### Customer Information
+
+```php
+// Get customer for quotation
+$customer = $quotation->contact;
+
+// Access customer details
+$customerName = $quotation->contact->name;
+$customerEmail = $quotation->contact->email;
+```
+
+### Document Subtype
+
+```php
+// Get document subtype
+$subtype = $quotation->documentSubtype;
+
+// Document subtypes control:
+// - Number sequences
+// - Templates
+// - PDF formatting
+```
+
+### Workspace
+
+```php
+// Get workspace for quotation
+$workspace = $quotation->workspace;
+
+// Quotations are workspace-scoped
+$workspaceQuotations = Quotation::forWorkspace($workspace)->get();
+```
+
+## Querying Quotations
+
+### Filter by Status
+
+```php
+// Get quotations by status
+$pending = Quotation::where('status', QuotationStatus::Sent)->get();
+$accepted = Quotation::where('status', QuotationStatus::Accepted)->get();
+
+// Get quotations for contact (customer + related contacts)
+$contactIds = $contact->relatedContactIdsWithSelf();
+$quotations = Quotation::whereIn('contact_id', $contactIds)
+    ->orderByDesc('issue_date')
+    ->get();
+```
+
+### Date Ranges
+
+```php
+// Quotations in date range
+$quotations = Quotation::whereBetween('issue_date', [$startDate, $endDate])
+    ->get();
+
+// Expired quotations
+$expired = Quotation::where('due_date', '<', now())
+    ->where('status', QuotationStatus::Sent)
+    ->get();
+```
+
+## Use Cases
+
+<AccordionGroup>
+  <Accordion title="B2B Sales Process">
+    Send quotations to business customers for review and approval before creating formal invoices and shipping products.
+  </Accordion>
+  
+  <Accordion title="Custom Orders">
+    Create detailed quotations for custom product configurations or bulk orders with special pricing.
+  </Accordion>
+  
+  <Accordion title="Service Estimates">
+    Provide service cost estimates to customers before committing to the work.
+  </Accordion>
+  
+  <Accordion title="Price Negotiations">
+    Track multiple quote versions during price negotiations with customers.
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<CardGroup cols={1}>
+  <Card title="Clear Validity Period">
+    Always specify a clear expiration date for quotations to manage customer expectations and protect pricing.
+  </Card>
+  
+  <Card title="Detailed Line Items">
+    Include detailed product descriptions and itemization to avoid confusion when converting to invoices.
+  </Card>
+  
+  <Card title="Status Updates">
+    Keep quotation statuses current to maintain accurate sales pipeline reporting.
+  </Card>
+  
+  <Card title="Version Control">
+    If revising quotations during negotiations, consider creating new quotation versions rather than editing.
+  </Card>
+</CardGroup>
+
+## Quotation vs Invoice
+
+| Feature | Quotation | Invoice |
+|---------|-----------|----------|
+| Affects Inventory | No | Yes |
+| Requires Payment | No | Yes |
+| PDF Generation | Yes | Yes |
+| Status Tracking | Yes | Yes |
+| Expiration Date | Yes | Due Date |
+| Conversion | To Invoice | From Quotation |
+| Legal Document | Estimate | Legally Binding |
+
+## API Reference
+
+Key quotation model methods:
+
+- `recalculateTotal()` - Recalculate total from items
+- `contact()` - Relationship to Contact
+- `documentSubtype()` - Relationship to DocumentSubtype
+- `items()` - Relationship to QuotationItem
+- `workspace()` - Relationship to Workspace
+
+Model location: `app/Models/Quotation.php:1`
+
+Conversion controller: `app/Http/Controllers/ConvertQuotationToInvoiceController.php:1`
+
+## Related Resources
+
+- [Invoicing](/features/invoicing)
+- [Contact Management](/features/contacts)
+- [Product Catalog](/features/product-catalog)
+- [Sales Workflow](/guides/quotations-to-invoices)

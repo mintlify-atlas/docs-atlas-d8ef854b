@@ -1,0 +1,521 @@
+---
+title: Converting Quotations to Invoices
+description: Complete workflow for creating quotations and converting them to invoices in OptiFlow
+---
+
+Quotations (also called estimates or proforma invoices) allow you to provide pricing to customers before finalizing a sale. OptiFlow makes it easy to convert approved quotations into invoices.
+
+## Overview
+
+Quotation-to-invoice features:
+- Create detailed quotations with pricing and terms
+- Send quotations to customers for approval
+- Convert approved quotations to invoices with one click
+- Track quotation status (pending, approved, converted, cancelled)
+- Maintain link between quotation and resulting invoice
+
+## Creating a Quotation
+
+<Steps>
+
+<Step title="Navigate to Quotations">
+Go to **Quotations** → **Create Quotation**
+
+Reference: `QuotationController::create()` in `app/Http/Controllers/QuotationController.php:49`
+
+The quotation form is similar to invoice creation with these differences:
+- No payment recording (quotations aren't paid)
+- Document subtypes specific to quotations
+- Different document numbering sequence
+</Step>
+
+<Step title="Select Document Subtype">
+Choose quotation document type:
+- Standard quotation
+- Proforma invoice
+- Estimate
+- Budget
+
+The system generates the quotation number (NCF) based on the selected subtype.
+
+```php
+// Document subtypes filtered for quotations
+$documentSubtypes = DocumentSubtype::query()
+    ->active()
+    ->forQuotation()  // Only quotation document types
+    ->orderBy('name')
+    ->get();
+```
+</Step>
+
+<Step title="Select Customer">
+Search and select the customer contact:
+- Use searchable dropdown
+- Create new contact if needed
+- Customer information will transfer to invoice when converted
+</Step>
+
+<Step title="Add Quotation Items">
+Add products and services:
+
+1. **Search Products**: Find items to quote
+2. **Set Quantities**: Enter proposed quantities
+3. **Adjust Pricing**: Modify unit prices for quotations (e.g., discounted pricing)
+4. **Add Discounts**: Line-level or quote-wide discounts
+5. **Configure Taxes**: Select applicable taxes
+
+<Note>
+Pricing in quotations can differ from standard product prices. This allows you to offer special pricing or negotiate with customers.
+</Note>
+</Step>
+
+<Step title="Set Quotation Details">
+Configure quotation information:
+
+- **Issue Date**: Quotation date (defaults to today)
+- **Valid Until**: Expiration date for quoted pricing
+- **Payment Terms**: Proposed payment terms
+- **Notes**: Quote-specific terms, conditions, or instructions
+
+<Tip>
+Clearly state the quotation validity period. Standard practice is 30 days, but adjust based on your business needs and price volatility.
+</Tip>
+</Step>
+
+<Step title="Review Totals">
+Review the quotation summary:
+- Subtotal
+- Discounts
+- Taxes
+- Total quoted amount
+
+Calculations match invoice logic for consistency.
+</Step>
+
+<Step title="Save Quotation">
+Click **Create Quotation**
+
+The system:
+1. Creates quotation record with status `Pending`
+2. Creates quotation items with taxes
+3. Generates quotation number
+4. Updates document subtype numerator
+5. No stock deduction (stock is deducted only when converted to invoice)
+
+Reference: `CreateQuotationAction` (similar structure to `CreateInvoiceAction`)
+</Step>
+
+</Steps>
+
+## Quotation Statuses
+
+Quotations progress through these statuses:
+
+| Status | Description | Next Actions |
+|--------|-------------|-------------|
+| `Pending` | Awaiting customer response | Send to customer, Convert, Edit, Cancel |
+| `Approved` | Customer accepted | Convert to Invoice |
+| `Converted` | Already converted to invoice | View only |
+| `Cancelled` | Quotation cancelled | Archive only |
+| `Expired` | Past valid until date | Renew or Cancel |
+
+Reference: `QuotationStatus` enum
+
+## Sending Quotations to Customers
+
+After creating a quotation:
+
+<Steps>
+
+<Step title="Generate PDF">
+1. Navigate to quotation detail page
+2. Click **Download PDF** or **Preview PDF**
+3. System generates formatted quotation document
+</Step>
+
+<Step title="Send to Customer">
+Options for sending:
+
+**Email** (Recommended):
+- Click **Send via Email**
+- Email template pre-fills with quotation details
+- PDF automatically attached
+- Track when email was sent
+
+**Manual Delivery**:
+- Download PDF
+- Print and hand deliver, or
+- Attach to your own email client
+
+**Customer Portal** (if enabled):
+- Customer can view in their portal
+- Direct link provided
+- Customer can accept online
+</Step>
+
+</Steps>
+
+## Converting Quotations to Invoices
+
+When customer approves the quotation:
+
+<Steps>
+
+<Step title="Open Quotation">
+Navigate to the approved quotation detail page
+</Step>
+
+<Step title="Click Convert to Invoice">
+Click the **Convert to Invoice** button
+
+Reference: `ConvertQuotationToInvoiceController` in `app/Http/Controllers/ConvertQuotationToInvoiceController.php:16`
+
+```php
+public function __invoke(Quotation $quotation): RedirectResponse
+{
+    // Validation checks
+    if ($quotation->status === QuotationStatus::Converted) {
+        return redirect()->back()
+            ->with('error', 'La cotización ya ha sido convertida a factura.');
+    }
+    
+    if ($quotation->status === QuotationStatus::Cancelled) {
+        return redirect()->back()
+            ->with('error', 'No se puede convertir una cotización cancelada.');
+    }
+    
+    return redirect()->route('invoices.create-from-quotation', $quotation);
+}
+```
+
+<Warning>
+You cannot convert a quotation that:
+- Has already been converted
+- Is cancelled
+- Is expired (must renew first)
+</Warning>
+</Step>
+
+<Step title="Review Pre-filled Invoice">
+The invoice creation form opens with data from the quotation:
+
+**Transferred Data**:
+- ✅ Customer contact
+- ✅ All line items (products, quantities, prices)
+- ✅ Discounts
+- ✅ Tax configurations
+- ✅ Notes and terms
+- ✅ Salesmen assignments
+
+**New Data Required**:
+- Invoice document subtype (quotation type doesn't apply)
+- Invoice number (NCF)
+- Issue date (defaults to today)
+- Due date
+- Payment information (if collecting immediately)
+
+<Note>
+The invoice form is pre-filled but fully editable. You can adjust quantities, pricing, or items before creating the invoice.
+</Note>
+</Step>
+
+<Step title="Adjust If Needed">
+Make any necessary changes:
+- Modify quantities if partial delivery
+- Update pricing if changed from quote
+- Add or remove items
+- Adjust payment terms
+</Step>
+
+<Step title="Create Invoice">
+Click **Create Invoice**
+
+The system:
+1. Creates the invoice with all items
+2. Updates quotation status to `Converted`
+3. Links invoice to quotation (for tracking)
+4. Deducts stock for products with inventory tracking
+5. Creates payment record if payment was collected
+
+```php
+// From CreateInvoiceAction
+if (! empty($data['quotation_id'])) {
+    Quotation::query()
+        ->where('id', $data['quotation_id'])
+        ->update(['status' => QuotationStatus::Converted]);
+}
+```
+</Step>
+
+<Step title="View Invoice">
+You're redirected to the new invoice detail page.
+
+The invoice shows:
+- Link to original quotation
+- "Created from Quotation #XXX" notation
+- All invoice details and payment options
+</Step>
+
+</Steps>
+
+## What Data Transfers
+
+When converting a quotation to an invoice:
+
+### Data That Transfers
+
+✅ **Contact Information**: Customer and all contact details
+
+✅ **Line Items**: 
+- Products
+- Quantities
+- Unit prices (from quotation, not current product price)
+- Descriptions
+
+✅ **Discounts**:
+- Line-level discounts
+- Discount amounts and percentages
+
+✅ **Taxes**:
+- Tax selections per line item
+- Tax rates (captured at quotation time)
+
+✅ **Notes**: Terms, conditions, and additional information
+
+✅ **Salesmen**: Assigned salespeople
+
+### Data That Doesn't Transfer
+
+❌ **Document Number**: New invoice number generated
+
+❌ **Document Type**: Must select invoice document subtype
+
+❌ **Dates**: New issue date and due date
+
+❌ **Status**: Invoice starts as `PendingPayment`
+
+❌ **Quotation-Specific Data**: Valid until date, quotation status
+
+## Handling Modifications
+
+### Partial Conversion
+
+**Scenario**: Customer approves only part of the quotation
+
+**Solution**:
+1. Convert the quotation to invoice
+2. In the pre-filled invoice form, remove or adjust items
+3. Reduce quantities as needed
+4. Save the invoice
+5. The original quotation remains marked as "Converted"
+
+<Note>
+Currently, OptiFlow marks the entire quotation as converted even if you only invoiced part of it. Consider adding notes to track partial conversions.
+</Note>
+
+### Price Changes After Quotation
+
+**Scenario**: Product prices changed since quotation was issued
+
+**Behavior**: 
+- Quotation prices are preserved during conversion
+- Invoice uses the quoted prices, not current product prices
+
+**To Use Current Prices**:
+1. Manually update unit prices in the invoice form before saving
+2. Or create a fresh invoice instead of converting
+
+### Customer Requests Changes
+
+**Scenario**: Customer wants modifications to the quotation
+
+**Options**:
+
+**Option 1: Edit Quotation** (if not yet converted)
+1. Edit the quotation
+2. Update items, quantities, or pricing
+3. Regenerate and resend PDF
+4. Convert when approved
+
+**Option 2: Create New Quotation**
+1. Create new quotation version
+2. Reference original quotation number in notes
+3. Cancel old quotation
+4. Convert new quotation when approved
+
+## Quotation to Invoice Tracking
+
+### Finding Related Documents
+
+**From Quotation**:
+1. Open quotation detail page
+2. If converted, see "Converted to Invoice #XXX" link
+3. Click to view the resulting invoice
+
+**From Invoice**:
+1. Open invoice detail page
+2. If created from quotation, see "Created from Quotation #XXX"
+3. Click to view the original quotation
+
+### Reporting
+
+Track quotation conversion rates:
+
+1. Navigate to **Reports** → **Sales Reports** → **Quotation Analysis**
+2. View:
+   - Total quotations issued
+   - Conversion rate (quotations → invoices)
+   - Average time to conversion
+   - Quotations by status
+   - Win/loss analysis
+
+## Quotation Best Practices
+
+<Tip>
+**Clear Validity Periods**: Always set a "Valid Until" date. This creates urgency and protects you from old pricing commitments.
+</Tip>
+
+<Tip>
+**Detailed Line Items**: Be specific with product descriptions in quotations. This reduces confusion during conversion.
+</Tip>
+
+<Tip>
+**Include Terms**: Add payment terms, delivery timeframes, and conditions in the notes section.
+</Tip>
+
+<Tip>
+**Version Control**: If creating multiple quote versions for a customer, use reference numbers like "Q-001-v1", "Q-001-v2" in the notes.
+</Tip>
+
+<Tip>
+**Follow Up**: Track quotation follow-ups using tasks or comments. Set reminders to contact customers before quotations expire.
+</Tip>
+
+## Common Scenarios
+
+### Scenario 1: Standard Sales Quote
+
+<Steps>
+<Step title="Customer Inquiry">
+Customer asks for pricing on 10 items
+</Step>
+
+<Step title="Create Quotation">
+- Add all 10 products
+- Apply any volume discounts
+- Set 30-day validity
+- Include payment terms (Net 30)
+</Step>
+
+<Step title="Send to Customer">
+Email PDF quotation
+</Step>
+
+<Step title="Customer Approves">
+Customer sends approval email/PO
+</Step>
+
+<Step title="Convert to Invoice">
+Click "Convert to Invoice"
+Review and create invoice
+</Step>
+
+<Step title="Fulfill Order">
+Process the order and deliver goods
+Record payment when received
+</Step>
+</Steps>
+
+### Scenario 2: Project Estimate
+
+<Steps>
+<Step title="Create Detailed Quotation">
+- Multiple line items for different project phases
+- Service items and product items
+- Milestone-based pricing
+</Step>
+
+<Step title="Customer Negotiates">
+Create revised quotation with adjustments
+</Step>
+
+<Step title="Partial Conversion">
+Convert first milestone to invoice
+Keep quotation for reference on remaining work
+</Step>
+</Steps>
+
+### Scenario 3: Recurring Service Quote
+
+<Steps>
+<Step title="Create Template Quotation">
+Monthly service quotation with standard items
+</Step>
+
+<Step title="Monthly Conversion">
+Each month, convert to invoice for that period
+</Step>
+
+<Step title="Price Adjustments">
+Update quotation when prices change
+Notify customer before next conversion
+</Step>
+</Steps>
+
+## Troubleshooting
+
+### Cannot Convert Quotation
+
+**Error**: "La cotización ya ha sido convertida a factura"
+
+**Cause**: Quotation was already converted
+
+**Solution**: 
+- View the quotation to find the link to the existing invoice
+- Or create a new invoice manually if you need another invoice from the same items
+
+### Quotation Status Not Updating
+
+**Problem**: Created invoice but quotation still shows "Pending"
+
+**Cause**: Invoice wasn't created through the conversion workflow
+
+**Solution**: 
+- Manually update quotation status to "Converted" if needed
+- Or add a note linking to the related invoice
+
+### Stock Deducted Twice
+
+**Problem**: Stock was deducted when quotation was created
+
+**Investigation**: Quotations should NOT deduct stock. Check stock movement history.
+
+**Solution**: If stock was incorrectly deducted, create a stock adjustment to add it back.
+
+## Advanced Features
+
+### Quotation Approval Workflow
+
+For organizations requiring approval:
+
+1. Set up automation: "Quotation Created" → "Notify Manager"
+2. Manager reviews and approves in system
+3. Only approved quotations can be sent to customers
+4. Track approval history in activity log
+
+### Quotation Templates
+
+For frequently quoted item sets:
+
+1. Create a "template" quotation
+2. Clone it for new customers
+3. Adjust customer-specific details
+4. Saves time on complex quotations
+
+## Related Features
+
+- [Creating Invoices](/guides/creating-invoices)
+- [Contact Management](/guides/contact-management)
+- [Tax Configuration](/guides/tax-configuration)
+- [Quotation API Reference](/api/quotations)
+- [Invoice API Reference](/api/invoices)

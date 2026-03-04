@@ -1,80 +1,300 @@
 ---
 title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+description: "Get OptiFlow up and running in minutes with this quick start guide"
 ---
 
-## Get started in three steps
+This guide will help you quickly set up OptiFlow, create your first tenant, and start managing your optical store operations.
 
-Get your documentation site running locally and make your first customization.
+<Note>
+  Before starting, ensure you've completed the [installation](/installation) steps.
+</Note>
 
-### Step 1: Set up your local environment
+## Quick Setup
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+<Steps>
+  <Step title="Start the Development Environment">
+    Start all OptiFlow services with a single command:
 
-### Step 2: Deploy your changes
+    ```bash
+    composer run dev
+    ```
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    This starts:
+    - Laravel development server at `http://optiflow.test`
+    - Queue worker for background jobs
+    - Log viewer (Pail)
+    - Vite dev server for hot module replacement
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+    <Tip>
+      Using Laravel Herd? Your application is already served at `https://optiflow.test` without running any server.
+    </Tip>
+  </Step>
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+  <Step title="Create Your First Tenant">
+    Access the central admin panel to create a tenant:
 
-### Step 3: Go live
+    1. Open `https://optiflow.test/admin` in your browser
+    2. Create an admin user account (first-time setup)
+    3. Navigate to **Tenants** in the admin panel
+    4. Click **Create Tenant**
+    5. Fill in the tenant details:
+       - **Name**: Your business name (e.g., "Optica Vision")
+       - **Domain**: Subdomain for this tenant (e.g., "vision")
+       - **Email**: Admin email for this tenant
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+    ```php
+    // Tenant model structure
+    [
+      'name' => 'Optica Vision',
+      'domain' => 'vision', // Will be accessible at vision.optiflow.test
+      'data' => [
+        'email' => 'admin@opticavision.com',
+      ]
+    ]
+    ```
 
-## Next steps
+    <Info>
+      The tenant will be accessible at `https://{domain}.optiflow.test` (e.g., `https://vision.optiflow.test`)
+    </Info>
+  </Step>
 
-Now that you have your docs running, explore these key features:
+  <Step title="Access Your Tenant Portal">
+    Visit your tenant's subdomain:
+
+    ```
+    https://vision.optiflow.test
+    ```
+
+    On first access, you'll be prompted to:
+    1. Create your tenant admin account
+    2. Set up your first workspace
+    3. Configure basic settings
+  </Step>
+
+  <Step title="Create Your First Workspace">
+    A workspace represents a physical location or department:
+
+    1. After logging into your tenant portal
+    2. Navigate to **Settings** → **Workspaces**
+    3. Click **Create Workspace**
+    4. Enter workspace details:
+       - **Name**: Store location name (e.g., "Downtown Store")
+       - **Code**: Short identifier (e.g., "DT01")
+       - **Description**: Optional description
+
+    ```php
+    // Workspace model structure
+    [
+      'name' => 'Downtown Store',
+      'code' => 'DT01',
+      'description' => 'Main downtown location',
+    ]
+    ```
+
+    <Tip>
+      You can create multiple workspaces for different store locations and switch between them using the workspace selector in the navigation.
+    </Tip>
+  </Step>
+
+  <Step title="Configure Company Details">
+    Set up your company information for invoices and documents:
+
+    1. Go to **Settings** → **Company Details**
+    2. Fill in your business information:
+       - Company name
+       - Tax ID (RNC for Dominican Republic)
+       - Address and contact information
+       - Upload your company logo
+
+    This information will appear on all invoices and quotations.
+  </Step>
+
+  <Step title="Create Your First Product">
+    Add a product to your catalog:
+
+    1. Navigate to **Products**
+    2. Click **Create Product**
+    3. Enter product details:
+       - **Name**: Product name (e.g., "Ray-Ban Aviator")
+       - **SKU**: Stock keeping unit (e.g., "RB-3025")
+       - **Price**: Selling price
+       - **Cost**: Purchase cost (for profit calculations)
+       - **Stock Tracking**: Enable to track inventory
+
+    ```php
+    // Quick product creation example
+    [
+      'name' => 'Ray-Ban Aviator',
+      'sku' => 'RB-3025',
+      'price' => 150.00,
+      'cost' => 90.00,
+      'track_stock' => true,
+      'type' => 'physical',
+    ]
+    ```
+  </Step>
+
+  <Step title="Create Your First Invoice">
+    Generate your first invoice:
+
+    1. Go to **Invoices** → **Create Invoice**
+    2. Select or create a customer
+    3. Choose a document subtype (invoice type)
+    4. Add line items by searching for products
+    5. Set quantities and prices
+    6. Add payment (optional - can be paid later)
+    7. Click **Create Invoice**
+
+    The invoice will:
+    - Automatically calculate subtotal, taxes, and total
+    - Deduct stock if inventory tracking is enabled
+    - Generate a PDF for printing or emailing
+    - Update the customer's account balance
+
+    <Info>
+      Stock is automatically deducted when an invoice is created. You can view stock movements in **Inventory** → **Stock Movements**.
+    </Info>
+  </Step>
+</Steps>
+
+## What You've Accomplished
+
+After completing this quickstart, you have:
+
+- ✅ Created a tenant with its own isolated database
+- ✅ Set up a workspace for your store location
+- ✅ Configured company details for invoicing
+- ✅ Added your first product to the catalog
+- ✅ Generated your first invoice with automatic stock deduction
+
+## Next Steps
+
+Now that you have OptiFlow running, explore these features:
 
 <CardGroup cols={2}>
+  <Card title="Create Quotations" icon="file-lines" href="/guides/quotations-to-invoices">
+    Learn how to create quotations and convert them to invoices
+  </Card>
+  <Card title="Manage Inventory" icon="warehouse" href="/guides/managing-inventory">
+    Track stock levels, movements, and transfers between workspaces
+  </Card>
+  <Card title="Configure Taxes" icon="percentage" href="/guides/tax-configuration">
+    Set up tax rates and types for your jurisdiction
+  </Card>
+  <Card title="Import Contacts" icon="address-book" href="/guides/contact-management">
+    Bulk import customers and suppliers from Excel/CSV
+  </Card>
+</CardGroup>
 
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
+## Common Tasks
 
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
+### Adding Team Members
 
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
+1. Go to **Settings** → **Users**
+2. Click **Invite User**
+3. Enter email and select a role:
+   - **Owner**: Full access to everything
+   - **Admin**: Manage settings and users
+   - **Member**: Regular user access
+4. User receives invitation email
+5. They accept and set their password
 
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
+### Setting Up Stock Transfers
 
+Transfer inventory between workspaces:
+
+1. Navigate to **Inventory** → **Stock Transfers**
+2. Click **Create Transfer**
+3. Select source and destination workspaces
+4. Add products and quantities
+5. Submit transfer
+6. Stock automatically updates in both locations
+
+See the [Stock Transfers Guide](/guides/stock-transfers) for detailed instructions.
+
+### Creating Workflow Automations
+
+Automate repetitive tasks:
+
+1. Go to **Automations**
+2. Click **Create Automation**
+3. Use the visual builder to:
+   - Set up triggers (e.g., invoice created)
+   - Add actions (e.g., send WhatsApp notification)
+4. Test and activate your automation
+
+Learn more in the [Automations Guide](/workflows/automations).
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Can't access tenant subdomain">
+    **Solution**: Ensure your `APP_URL` in `.env` is set correctly and matches your Herd domain. For Laravel Herd, subdomains are automatically handled.
+
+    ```bash .env
+    APP_URL=http://optiflow.test
+    ```
+
+    Restart your development server after changing `.env`:
+    ```bash
+    composer run dev
+    ```
+  </Accordion>
+
+  <Accordion title="Stock not deducting from invoices">
+    **Solution**: Verify that:
+    1. Product has "Track Stock" enabled
+    2. Initial stock was set for the product in the current workspace
+    3. You're viewing the correct workspace (check workspace selector)
+
+    View stock movements to debug:
+    **Inventory** → **Stock Movements**
+  </Accordion>
+
+  <Accordion title="PDF generation fails">
+    **Solution**: Ensure the DomPDF package is installed and the `storage/` directory is writable:
+
+    ```bash
+    composer require barryvdh/laravel-dompdf
+    chmod -R 775 storage
+    ```
+  </Accordion>
+
+  <Accordion title="Queue jobs not processing">
+    **Solution**: Ensure the queue worker is running. If using `composer run dev`, it starts automatically. Otherwise:
+
+    ```bash
+    php artisan queue:work --tries=3
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Advanced Features
+
+Once you're comfortable with the basics, explore these advanced capabilities:
+
+- **Multi-Currency**: Handle transactions in different currencies with exchange rates
+- **NCF Compliance**: Configure Dominican tax receipt numbers (Números de Comprobante Fiscal)
+- **Workflow Stages**: Track jobs through custom workflow stages
+- **Prescription Management**: Manage optical prescriptions with clinical data
+- **Telegram/WhatsApp Notifications**: Set up automated customer notifications
+- **API Integration**: Build custom integrations using the REST API
+
+<CardGroup cols={2}>
+  <Card title="Multi-Currency Setup" icon="dollar-sign" href="/admin/currencies">
+    Configure multiple currencies and exchange rates
+  </Card>
+  <Card title="API Documentation" icon="code" href="/api/overview">
+    Integrate OptiFlow with other systems
+  </Card>
+  <Card title="Workflow Automation" icon="bolt" href="/workflows/overview">
+    Build custom workflows for your business
+  </Card>
+  <Card title="User Roles & Permissions" icon="shield" href="/admin/user-roles">
+    Set up fine-grained access control
+  </Card>
 </CardGroup>
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+  Need help? Check out our comprehensive [guides](/guides/creating-invoices) or explore the [API reference](/api/overview).
 </Note>

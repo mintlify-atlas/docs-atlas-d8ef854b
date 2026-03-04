@@ -1,0 +1,333 @@
+---
+title: Creating Invoices
+description: Complete guide to creating and managing invoices in OptiFlow
+---
+
+This guide walks you through the complete invoice creation workflow in OptiFlow, from selecting customers to recording payments.
+
+## Overview
+
+Invoices in OptiFlow support multiple features:
+- Multi-workspace operations
+- Automatic tax calculations
+- Stock deduction tracking
+- Payment recording
+- PDF generation
+- Document numbering (NCF) for compliance
+
+## Prerequisites
+
+Before creating invoices, ensure you have:
+- **Contacts**: At least one customer contact created
+- **Products**: Products with prices configured
+- **Document Subtypes**: Invoice document types set up
+- **Taxes**: Tax rates configured (if applicable)
+- **Permissions**: `invoices:create` permission
+
+## Creating an Invoice
+
+<Steps>
+
+<Step title="Navigate to Invoice Creation">
+
+Go to **Invoices** → **Create Invoice** or use the quick action from the dashboard.
+
+The system will load:
+- Available document subtypes for invoices
+- Current workspace context
+- Default tax configurations
+- Available payment methods
+
+Reference: `InvoiceController::create()` in `app/Http/Controllers/InvoiceController.php:58`
+</Step>
+
+<Step title="Select Document Subtype">
+
+Choose the invoice type (document subtype). The system will:
+- Auto-generate the next NCF (document number) based on the subtype's prefix and numerator
+- Load the default document subtype if workspace has a preference
+- Validate NCF availability
+
+```php
+// Document number is auto-generated
+$ncf = $documentSubtype->generateNCF();
+```
+
+<Warning>
+If you see an error about NCF configuration, navigate to **Settings** → **Document Subtypes** to configure the NCF series.
+</Warning>
+</Step>
+
+<Step title="Select Customer">
+
+Search and select a customer contact:
+- Use the searchable dropdown
+- Type customer name, identification, or phone
+- Create a new contact on-the-fly if needed
+
+The contact search uses `ContactSearch::searchCustomers()` for filtering customer-type contacts only.
+</Step>
+
+<Step title="Add Invoice Items">
+
+Add products to your invoice:
+
+1. **Search Products**: Use the product search field
+2. **Select Product**: Click to add to invoice
+3. **Set Quantity**: Enter the quantity to sell
+4. **Adjust Price**: Unit price is pre-filled from product data but can be modified
+5. **Configure Discount**: Add line-level discounts (percentage or fixed amount)
+6. **Select Taxes**: Choose applicable taxes per line item
+
+```javascript
+// Product search is reactive
+// Results update as you type
+productSearch.search(searchTerm, currentWorkspace)
+```
+
+<Note>
+Products with `track_stock` enabled will automatically deduct inventory when the invoice is saved.
+</Note>
+
+### Tax Calculations
+
+Taxes are grouped by type:
+- **ITBIS** (Value Added Tax)
+- **ISC** (Selective Consumption Tax)  
+- **Withholding Taxes**
+
+Taxes are applied at the line item level and can be:
+- Multiple taxes per item
+- Exclusive (calculated on subtotal)
+- Inclusive (already included in price)
+
+Reference: Tax types are defined in `TaxType` enum with `isExclusive()` method.
+</Step>
+
+<Step title="Set Invoice Details">
+
+Configure invoice metadata:
+
+- **Issue Date**: Date of invoice creation (defaults to today)
+- **Due Date**: Payment due date
+- **Payment Term**: e.g., "Net 30", "Due on Receipt"
+- **Notes**: Terms and conditions or special instructions
+- **Salesmen**: Assign one or more salesmen to the invoice
+
+The default terms and conditions can be configured in **Company Details** settings (`terms_conditions` key).
+</Step>
+
+<Step title="Review Totals">
+
+The invoice totals are calculated automatically:
+
+- **Subtotal**: Sum of (quantity × unit_price) for all items
+- **Discount**: Total discounts applied
+- **Tax Amount**: Sum of all tax amounts
+- **Total**: Subtotal - Discount + Tax Amount
+
+```php
+// Calculation in CreateInvoiceAction
+'total_amount' => $data['total'],
+'subtotal_amount' => $data['subtotal'],
+'discount_amount' => $data['discount_total'],
+'tax_amount' => $data['tax_amount'],
+```
+</Step>
+
+<Step title="Record Payment (Optional)">
+
+You can optionally record a payment immediately:
+
+1. Check **Register Payment**
+2. Select **Payment Method**: Cash, Transfer, Credit Card, etc.
+3. Select **Bank Account**: Where the payment is received
+4. Enter **Amount**: Payment amount (can be partial)
+5. Set **Payment Date**: Defaults to today
+6. Add **Notes**: Payment reference or details
+
+Reference: `CreatePaymentAction` is called within `CreateInvoiceAction::handle()`
+
+<Tip>
+Partial payments are supported. The invoice status will automatically update to "Partially Paid" if the payment amount is less than the total.
+</Tip>
+</Step>
+
+<Step title="Save Invoice">
+
+Click **Create Invoice** to save.
+
+The system will:
+1. Validate the NCF
+2. Create the invoice record (status: `PendingPayment`)
+3. Create invoice items with tax associations
+4. Deduct stock for products with inventory tracking
+5. Update document subtype numerator
+6. Create payment record (if payment was registered)
+7. Update invoice status based on payment
+8. Sync salesmen associations
+9. Dispatch `invoice.created` event for automations
+
+Reference: `CreateInvoiceAction::handle()` in `app/Actions/CreateInvoiceAction.php:34`
+
+```php
+DB::transaction(function () use ($workspace, $data) {
+    $invoice = $this->createDocument($workspace, $data, $documentSubtype);
+    $this->createItems->handle($invoice, $items);
+    // ... additional processing
+});
+```
+</Step>
+
+</Steps>
+
+## Stock Deduction
+
+When an invoice is created:
+
+- Products with `track_stock = true` will have inventory automatically deducted
+- A `StockMovement` record is created with type `OUT`
+- Stock is deducted from the current workspace
+- If insufficient stock exists, the invoice creation will fail
+
+```php
+// From CreateInvoiceItemAction
+throw new InsufficientStockException(
+    "Insufficient stock for product {$product->name}"
+);
+```
+
+## Invoice Statuses
+
+| Status | Description |
+|--------|-------------|
+| `PendingPayment` | No payment recorded yet |
+| `PartiallyPaid` | Some payment received, balance remaining |
+| `Paid` | Fully paid |
+| `Cancelled` | Invoice was cancelled |
+| `Draft` | Invoice in draft state |
+
+Status updates automatically based on payments:
+
+```php
+// Invoice::updatePaymentStatus()
+if ($this->payments()->sum('amount') >= $this->total_amount) {
+    $this->update(['status' => InvoiceStatus::Paid]);
+} elseif ($this->payments()->sum('amount') > 0) {
+    $this->update(['status' => InvoiceStatus::PartiallyPaid]);
+}
+```
+
+## Generating Invoice PDFs
+
+After creating an invoice:
+
+1. Navigate to the invoice detail page
+2. Click **Download PDF** or **View PDF**
+3. The system uses `GenerateInvoicePdfAction` to create the PDF
+4. PDF includes all invoice details, items, taxes, and payment information
+
+Bulk PDF generation is available from the invoice list:
+- Select multiple invoices
+- Click **Download PDFs**
+- System generates a ZIP archive with all PDFs
+
+Reference: `DownloadInvoicePdfController` and `BulkDownloadInvoicePdfController`
+
+## Recording Additional Payments
+
+For existing invoices with outstanding balances:
+
+<Steps>
+
+<Step title="Open Invoice">
+Navigate to the invoice detail page
+</Step>
+
+<Step title="Click Add Payment">
+The payment form will appear with the outstanding balance
+</Step>
+
+<Step title="Enter Payment Details">
+- Amount (defaults to remaining balance)
+- Payment method
+- Bank account
+- Payment date
+- Notes/reference
+</Step>
+
+<Step title="Save Payment">
+The invoice status will update automatically based on the new payment total
+</Step>
+
+</Steps>
+
+## Editing Invoices
+
+<Warning>
+Invoices can only be edited if they are in `PendingPayment` status. If any payment has been recorded, you must delete all payments before editing.
+</Warning>
+
+To edit an invoice:
+
+1. Navigate to invoice detail page
+2. Click **Edit Invoice**
+3. Modify details as needed
+4. Save changes
+
+Reference: `InvoiceController::edit()` checks `$invoice->status !== InvoiceStatus::PendingPayment`
+
+## Common Issues
+
+### NCF Configuration Error
+
+**Problem**: "Unable to generate NCF" error
+
+**Solution**: Configure the document subtype:
+1. Go to **Settings** → **Document Subtypes**
+2. Edit the invoice document type
+3. Set the prefix, starting number, and valid range
+
+### Insufficient Stock Error
+
+**Problem**: "Insufficient stock for product X"
+
+**Solution**: 
+- Check product stock levels in the current workspace
+- Perform a stock adjustment if needed
+- Or transfer stock from another workspace
+
+### Cannot Edit Invoice
+
+**Problem**: "This invoice has a payment registered"
+
+**Solution**:
+1. Navigate to invoice detail page
+2. Delete all associated payments
+3. Now you can edit the invoice
+
+## Best Practices
+
+<Tip>
+**Use Document Subtypes**: Create different document subtypes for different invoice types (retail, wholesale, export) for better organization and reporting.
+</Tip>
+
+<Tip>
+**Default Taxes**: Set commonly used taxes as default to speed up invoice creation.
+</Tip>
+
+<Tip>
+**Salesmen Tracking**: Always assign salesmen to invoices for accurate commission tracking and sales reports.
+</Tip>
+
+<Tip>
+**Payment Terms**: Use consistent payment terms ("Net 30", "Net 15") for easier tracking of receivables.
+</Tip>
+
+## Related Features
+
+- [Converting Quotations to Invoices](/guides/quotations-to-invoices)
+- [Managing Inventory](/guides/managing-inventory)
+- [Contact Management](/guides/contact-management)
+- [Tax Configuration](/guides/tax-configuration)
+- [Invoice API Reference](/api/invoices)

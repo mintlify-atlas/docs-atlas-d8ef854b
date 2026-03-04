@@ -1,0 +1,430 @@
+---
+title: Managing Inventory
+description: Complete guide to inventory management and stock tracking in OptiFlow
+---
+
+OptiFlow provides comprehensive inventory management across multiple workspaces with real-time stock tracking, adjustments, and movement history.
+
+## Overview
+
+Inventory features include:
+- Multi-workspace stock tracking
+- Automatic stock deductions on sales
+- Manual stock adjustments
+- Stock movement history
+- Minimum stock level alerts
+- Inventory valuation
+
+## Product Stock Configuration
+
+Before tracking inventory, products must be configured:
+
+### Enabling Stock Tracking
+
+When creating or editing a product:
+
+1. Navigate to **Products** → **Create Product** or edit an existing product
+2. Enable **Track Stock** checkbox
+3. Set **Minimum Quantity** for low stock alerts (optional)
+4. Set **Cost** for inventory valuation
+
+```php
+// Product model
+'track_stock' => 'boolean',  // Enable/disable tracking
+'cost' => 'decimal:2',       // Unit cost for valuation
+```
+
+<Note>
+Only products with `track_stock = true` will have inventory managed. Products without stock tracking can be sold unlimited quantities.
+</Note>
+
+## Viewing Stock Levels
+
+### Current Stock by Workspace
+
+View real-time stock levels:
+
+1. Navigate to **Inventory** → **Stock Levels**
+2. Filter by:
+   - Workspace (location)
+   - Product category
+   - Low stock items
+   - Product name/SKU
+
+Each product shows:
+- Current quantity per workspace
+- Minimum quantity threshold
+- Stock value (quantity × cost)
+- Available/Reserved quantities
+
+### Product-Specific Stock View
+
+1. Go to **Products** → Select a product
+2. View the **Inventory** tab
+3. See stock breakdown by workspace
+4. View recent stock movements
+
+Reference: `ProductStock` model stores quantity per product per workspace
+
+## Stock Movements
+
+All inventory changes are tracked as stock movements:
+
+### Movement Types
+
+| Type | Description | Impact |
+|------|-------------|--------|
+| `IN` | Stock received | Increases quantity |
+| `OUT` | Stock sold/removed | Decreases quantity |
+| `ADJUSTMENT` | Manual correction | Increases or decreases |
+| `TRANSFER_OUT` | Sent to another workspace | Decreases at source |
+| `TRANSFER_IN` | Received from another workspace | Increases at destination |
+| `INITIAL` | Initial stock setup | Sets starting quantity |
+
+Reference: `StockMovementType` enum in `app/Enums/StockMovementType.php`
+
+### Viewing Stock Movements
+
+<Steps>
+
+<Step title="Navigate to Movement History">
+Go to **Inventory** → **Stock Movements**
+</Step>
+
+<Step title="Filter Movements">
+Filter by:
+- Date range
+- Movement type
+- Product
+- Workspace
+- User who created the movement
+</Step>
+
+<Step title="View Movement Details">
+Each movement shows:
+- Product name and SKU
+- Quantity changed
+- Movement type
+- User who performed the action
+- Timestamp
+- Related document (invoice, transfer, etc.)
+- Notes
+</Step>
+
+</Steps>
+
+### Automatic Stock Movements
+
+Stock movements are created automatically when:
+
+1. **Invoice Created**: Stock moves `OUT` for each line item
+   - Reference: `CreateInvoiceItemAction` creates stock movements
+   - Type: `StockMovementType::OUT`
+   - Related to invoice
+
+2. **Stock Transfer**: Two movements created
+   - `TRANSFER_OUT` at source workspace
+   - `TRANSFER_IN` at destination workspace
+   - Both linked by `reference_number`
+
+```php
+// From StockMovement model
+public function isIncoming(): bool
+{
+    return in_array($this->type, ['in', 'adjustment']) && $this->quantity > 0;
+}
+
+public function isOutgoing(): bool
+{
+    return in_array($this->type, ['out', 'transfer']) ||
+           ($this->type === 'adjustment' && $this->quantity < 0);
+}
+```
+
+## Stock Adjustments
+
+Manual inventory corrections for damaged goods, loss, found items, or count corrections.
+
+<Steps>
+
+<Step title="Navigate to Adjustments">
+Go to **Inventory** → **Stock Adjustments** → **New Adjustment**
+
+Reference: `ProductInventoryAdjustmentController::create()`
+</Step>
+
+<Step title="Select Workspace">
+Choose the workspace where inventory is being adjusted.
+
+The form loads:
+- All workspaces the user has access to
+- All products with stock tracking enabled
+- Current stock levels for each product in each workspace
+
+```php
+// Current stock is loaded per product per workspace
+$stockMap = ProductStock::query()
+    ->whereIn('workspace_id', $workspaceIds)
+    ->get()
+    ->groupBy('product_id');
+```
+</Step>
+
+<Step title="Add Adjustment Items">
+For each product being adjusted:
+
+1. **Select Product**: Choose from products with stock tracking
+2. **Current Stock**: System displays current quantity
+3. **New Quantity**: Enter the corrected quantity
+4. **Adjustment**: System calculates difference automatically
+5. **Reason**: Select reason (damaged, lost, found, count correction)
+6. **Notes**: Add explanation for the adjustment
+</Step>
+
+<Step title="Review and Save">
+Review the adjustment summary:
+- Total items adjusted
+- Net quantity change
+- Affected workspaces
+- Adjustment value (quantity × product cost)
+
+Click **Save Adjustment** to commit changes.
+
+Reference: `CreateProductInventoryAdjustmentAction::handle()`
+</Step>
+
+</Steps>
+
+### Adjustment Process
+
+When an adjustment is saved:
+
+```php
+// ProductInventoryAdjustment creates multiple items
+$adjustment = ProductInventoryAdjustment::create([
+    'workspace_id' => $workspace->id,
+    'adjustment_date' => $data['adjustment_date'],
+    'notes' => $data['notes'],
+    'created_by' => $user->id,
+]);
+
+// For each item:
+// 1. Update ProductStock quantity
+// 2. Create StockMovement record
+// 3. Track the adjustment reason
+```
+
+<Warning>
+Stock adjustments directly modify inventory quantities. Ensure adjustments are reviewed and approved according to your internal controls.
+</Warning>
+
+## Setting Initial Stock
+
+For new products or when starting to use OptiFlow:
+
+<Steps>
+
+<Step title="Navigate to Initial Stock">
+Go to **Inventory** → **Initial Stock**
+
+Reference: `InitialStockController`
+</Step>
+
+<Step title="Select Products and Workspaces">
+Choose:
+- Products to set initial stock for
+- Workspaces where stock exists
+- Initial quantities per workspace
+- Unit cost for valuation
+</Step>
+
+<Step title="Save Initial Stock">
+Click **Save** to create:
+- `ProductStock` records with initial quantities
+- `StockMovement` records with type `INITIAL`
+- Starting inventory valuation
+</Step>
+
+</Steps>
+
+<Tip>
+Set initial stock before processing any sales to ensure accurate inventory from the start.
+</Tip>
+
+## Multi-Workspace Stock Management
+
+OptiFlow supports tracking inventory across multiple locations (workspaces).
+
+### Workspace Context
+
+- Each workspace maintains independent stock levels
+- Users can have access to one or multiple workspaces
+- Inventory reports can be workspace-specific or consolidated
+
+### Viewing Stock Across Workspaces
+
+For users with `ViewAllLocations` permission:
+
+1. Navigate to **Inventory** → **Stock by Location**
+2. View consolidated stock levels across all workspaces
+3. See stock distribution per location
+
+```php
+// ProductInventoryAdjustmentController checks permission
+if (! $user->can(Permission::ViewAllLocations)) {
+    $workspacesQuery->whereIn('id', $user->workspaces()->select('workspaces.id'));
+}
+```
+
+## Stock Transfers Between Workspaces
+
+Transfer inventory between locations without creating invoices.
+
+See the dedicated guide: [Stock Transfers](/guides/stock-transfers)
+
+## Inventory Reporting
+
+### Available Reports
+
+1. **Stock Valuation Report**
+   - Total inventory value by workspace
+   - Value by product category
+   - Cost basis calculation
+
+2. **Stock Movement Report**
+   - Movements by date range
+   - In/Out/Adjustment breakdown
+   - Movement trends
+
+3. **Low Stock Report**
+   - Products below minimum quantity
+   - Workspaces affected
+   - Reorder recommendations
+
+4. **Stock Aging Report**
+   - Products by time in inventory
+   - Slow-moving items
+   - Inventory turnover
+
+Reference: Navigate to **Reports** → **Inventory Reports**
+
+## Low Stock Alerts
+
+Configure automatic alerts for low stock:
+
+<Steps>
+
+<Step title="Set Minimum Quantities">
+For each product:
+1. Edit the product
+2. Set **Minimum Quantity** threshold
+3. Save changes
+</Step>
+
+<Step title="View Low Stock Items">
+Navigate to **Inventory** → **Low Stock**
+
+Products below minimum quantity are highlighted.
+</Step>
+
+<Step title="Configure Notifications (Optional)">
+Set up automations to send notifications when stock falls below minimum:
+
+1. Go to **Settings** → **Automations**
+2. Create trigger: "Product Stock Below Minimum"
+3. Add action: "Send Email Notification"
+4. Specify recipients
+</Step>
+
+</Steps>
+
+## Stock Count Procedures
+
+### Physical Inventory Count
+
+Best practice for periodic stock verification:
+
+<Steps>
+
+<Step title="Export Current Stock">
+1. Navigate to **Inventory** → **Stock Levels**
+2. Export to Excel/CSV
+3. Print count sheets
+</Step>
+
+<Step title="Perform Physical Count">
+Count actual stock on hand and record on sheets
+</Step>
+
+<Step title="Compare and Adjust">
+1. Compare physical count to system quantities
+2. Create stock adjustment for discrepancies
+3. Document reasons for variances
+</Step>
+
+<Step title="Review and Approve">
+Have manager review and approve adjustments before committing
+</Step>
+
+</Steps>
+
+## Common Issues
+
+### Negative Stock
+
+**Problem**: System shows negative inventory
+
+**Solution**:
+1. Review stock movements for the product
+2. Identify incorrect transactions
+3. Create stock adjustment to correct
+4. Enable "Prevent Negative Stock" in settings (if available)
+
+### Stock Deduction Not Happening
+
+**Problem**: Invoice created but stock not deducted
+
+**Solution**:
+1. Verify product has `track_stock` enabled
+2. Check if product has ProductStock record for the workspace
+3. Review stock movement history for the transaction
+
+### Incorrect Stock Levels After Transfer
+
+**Problem**: Stock levels don't match after workspace transfer
+
+**Solution**:
+1. Navigate to **Inventory** → **Stock Transfers**
+2. Find the transfer record
+3. Verify both TRANSFER_OUT and TRANSFER_IN movements exist
+4. Check the reference numbers match
+5. Create manual adjustment if needed
+
+## Best Practices
+
+<Tip>
+**Regular Stock Counts**: Perform physical inventory counts monthly or quarterly to ensure system accuracy.
+</Tip>
+
+<Tip>
+**Set Minimum Quantities**: Configure minimum stock levels for all regularly sold items to avoid stockouts.
+</Tip>
+
+<Tip>
+**Document Adjustments**: Always add detailed notes to stock adjustments for audit trail purposes.
+</Tip>
+
+<Tip>
+**Review Movement History**: Regularly review stock movement reports to identify patterns and potential issues.
+</Tip>
+
+<Tip>
+**Use Categories**: Organize products into categories for easier inventory reporting and management.
+</Tip>
+
+## Related Features
+
+- [Stock Transfers](/guides/stock-transfers)
+- [Creating Invoices](/guides/creating-invoices)
+- [Product Management](/features/product-catalog)
+- [Inventory API Reference](/api/inventory)

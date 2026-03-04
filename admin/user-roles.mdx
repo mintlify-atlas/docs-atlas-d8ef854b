@@ -1,0 +1,366 @@
+---
+title: User Roles & Permissions
+description: Managing user access control with role-based permissions
+---
+
+OptiFlow uses the [Spatie Laravel Permission](https://spatie.be/docs/laravel-permission) package to implement role-based access control (RBAC). The system supports both global roles and workspace-specific roles.
+
+## Role Hierarchy
+
+OptiFlow implements a two-level role system:
+
+### Global Roles (Business Roles)
+
+Defined in `app/Enums/UserRole.php`, these are tenant-wide roles assigned to users:
+
+```php
+enum UserRole: string
+{
+    case Admin = 'admin';
+    case Manager = 'manager';
+    case Employee = 'employee';
+    // ... other roles
+}
+```
+
+Global roles are stored in the `business_role` column on the `users` table.
+
+### Workspace Roles
+
+These are workspace-specific roles managed through the `user_workspace` pivot table:
+
+- **owner**: Workspace owner with full control
+- **admin**: Administrative access within workspace
+- **member**: Standard user access
+- Custom roles defined per workspace needs
+
+<Note>
+A user can have different roles in different workspaces. For example, Alice could be an admin in "Main Office" workspace but a member in "Warehouse" workspace.
+</Note>
+
+## Role-Based Access Control (RBAC)
+
+### Using Spatie Permission Package
+
+The `App\Models\User` model uses the `HasRoles` trait:
+
+```php
+use Spatie\Permission\Traits\HasRoles;
+
+class User extends Authenticatable
+{
+    use HasRoles;
+    
+    // ...
+}
+```
+
+This provides methods for checking roles and permissions:
+
+```php
+// Check if user has a role
+$user->hasRole('admin');
+
+// Assign a role
+$user->assignRole('manager');
+
+// Check permission
+$user->can('edit invoices');
+
+// Assign permission
+$user->givePermissionTo('create invoices');
+```
+
+### Global Roles vs Workspace Roles
+
+**Global Business Roles** (`business_role` column):
+- Tenant-wide designation
+- Set once per user
+- Used for high-level access decisions
+- Checked with: `$user->hasBusinessRole(UserRole::Admin)`
+
+**Workspace Roles** (pivot table `role` column):
+- Workspace-specific
+- User can have different role per workspace
+- Managed through workspace assignments
+- Checked with: `$workspace->users()->where('user_id', $user->id)->first()->pivot->role`
+
+## Creating Custom Roles
+
+### Creating Global Roles
+
+Global roles are managed through the `GlobalRoleController` and related actions:
+
+<Steps>
+  <Step title="Create Role Record">
+    Use `CreateGlobalRoleAction` to create a new role:
+    ```php
+    use App\Actions\CreateGlobalRoleAction;
+    
+    $action = new CreateGlobalRoleAction();
+    $action->handle($data); // ['name' => 'supervisor', ...]
+    ```
+  </Step>
+  
+  <Step title="Define Permissions">
+    Assign permissions to the role:
+    ```php
+    use Spatie\Permission\Models\Role;
+    
+    $role = Role::findByName('supervisor');
+    $role->givePermissionTo(['view invoices', 'create invoices']);
+    ```
+  </Step>
+  
+  <Step title="Assign to Users">
+    Use `AssignRoleAction` to assign the role:
+    ```php
+    use App\Actions\AssignRoleAction;
+    
+    $action->handle($user, 'supervisor');
+    ```
+  </Step>
+</Steps>
+
+### Creating Workspace Roles
+
+Workspace roles are simpler and stored in the pivot table:
+
+```php
+use App\Actions\CreateWorkspaceRoleAction;
+
+$action = new CreateWorkspaceRoleAction();
+$action->handle($workspace, $roleName, $permissions);
+```
+
+## Assigning Permissions
+
+### Permission Structure
+
+Permissions follow a resource-action pattern:
+
+- `view {resource}`
+- `create {resource}`
+- `edit {resource}`
+- `delete {resource}`
+
+Example permissions:
+```
+view invoices
+create invoices
+edit invoices
+delete invoices
+view products
+edit products
+```
+
+### Assigning Permissions to Roles
+
+```php
+use Spatie\Permission\Models\Role;
+use Spatie\Permission\Models\Permission;
+
+// Create permission if it doesn't exist
+Permission::firstOrCreate(['name' => 'view invoices']);
+
+// Assign to role
+$role = Role::findByName('employee');
+$role->givePermissionTo('view invoices');
+
+// Assign multiple permissions
+$role->syncPermissions([
+    'view invoices',
+    'create invoices',
+    'view products',
+]);
+```
+
+### Direct User Permissions
+
+You can also assign permissions directly to users (bypassing roles):
+
+```php
+// Give permission directly to user
+$user->givePermissionTo('edit company details');
+
+// Remove direct permission
+$user->revokePermissionTo('edit company details');
+
+// Check if user has permission (checks both roles and direct permissions)
+$user->can('edit company details');
+```
+
+<Warning>
+Direct user permissions should be used sparingly. Prefer role-based permissions for maintainability.
+</Warning>
+
+## User-Workspace-Role Relationships
+
+### The Pivot Table
+
+The `user_workspace` pivot table stores:
+
+```php
+[
+    'user_id' => 1,
+    'workspace_id' => 5,
+    'role' => 'admin',
+    'joined_at' => '2024-01-15 10:30:00',
+]
+```
+
+### Managing Workspace Role Assignments
+
+```php
+// Assign user to workspace with role
+use App\Actions\AssignUserToWorkspaceAction;
+
+$action = new AssignUserToWorkspaceAction();
+$action->handle($workspace, $user, 'admin');
+
+// Sync workspace role (update existing)
+use App\Actions\SyncWorkspaceRoleAction;
+
+$action = new SyncWorkspaceRoleAction();
+$action->handle($user, $workspace, 'member');
+```
+
+### Checking Workspace Roles
+
+```php
+// Get user's role in specific workspace
+$workspaceRole = $user->workspaces()
+    ->where('workspace_id', $workspace->id)
+    ->first()
+    ->pivot
+    ->role;
+
+// Check if user is workspace owner
+$isOwner = $workspace->owner_id === $user->id;
+```
+
+## Authorization in Controllers
+
+### Using Policies
+
+Define authorization logic in policy classes:
+
+```php
+namespace App\Policies;
+
+class InvoicePolicy
+{
+    public function view(User $user, Invoice $invoice): bool
+    {
+        // Check workspace access
+        if (!$user->hasAccessToWorkspace($invoice->workspace)) {
+            return false;
+        }
+        
+        // Check permission
+        return $user->can('view invoices');
+    }
+    
+    public function create(User $user): bool
+    {
+        return $user->can('create invoices');
+    }
+}
+```
+
+### Using Middleware
+
+Protect routes with role/permission middleware:
+
+```php
+// Require specific role
+Route::get('/admin', function () {
+    //
+})->middleware('role:admin');
+
+// Require specific permission
+Route::post('/invoices', function () {
+    //
+})->middleware('permission:create invoices');
+
+// Require one of several roles
+Route::get('/dashboard', function () {
+    //
+})->middleware('role:admin|manager');
+```
+
+## Managing Roles via GlobalRoleController
+
+The `GlobalRoleController` (`app/Http/Controllers/GlobalRoleController.php`) provides endpoints for role management:
+
+- `index()` - List all roles
+- `create()` - Show create form
+- `store()` - Create new role
+- `edit()` - Show edit form
+- `update()` - Update role
+- `destroy()` - Delete role
+
+Common actions:
+
+### Listing Roles with Permissions
+
+```php
+$roles = Role::with('permissions')->get();
+```
+
+### Syncing Role Permissions
+
+```php
+use App\Actions\SyncGlobalRoleAction;
+
+// The SyncGlobalRoleController handles this
+$action = new SyncGlobalRoleAction();
+$action->handle($role, $permissionIds);
+```
+
+## Business Role Checking
+
+The `User` model provides business role helpers:
+
+```php
+use App\Enums\UserRole;
+
+// Check business role
+if ($user->hasBusinessRole(UserRole::Admin)) {
+    // User is a global admin
+}
+
+// Get business role
+$role = $user->business_role; // Returns UserRole enum
+```
+
+## Best Practices
+
+1. **Use Roles Over Direct Permissions**: Assign permissions to roles, then assign roles to users
+2. **Meaningful Names**: Use clear, descriptive permission names (e.g., "edit invoices" not "invoice_edit")
+3. **Workspace Isolation**: Always check workspace access before checking permissions
+4. **Cache Permissions**: Spatie Permission caches permissions automatically; clear cache after changes
+5. **Policy Classes**: Use Laravel policies for complex authorization logic
+6. **Audit Trails**: Log role and permission changes for security auditing
+
+## Clearing Permission Cache
+
+After modifying roles or permissions, clear the cache:
+
+```bash
+php artisan permission:cache-reset
+```
+
+Or in code:
+
+```php
+use Spatie\Permission\PermissionRegistrar;
+
+app()[PermissionRegistrar::class]->forgetCachedPermissions();
+```
+
+## Related Resources
+
+- [Workspace Management](/admin/workspace-management) - Managing workspace access
+- [Multi-Tenancy](/admin/multi-tenancy) - Understanding tenant isolation
+- [Spatie Permission Documentation](https://spatie.be/docs/laravel-permission) - Official package docs
